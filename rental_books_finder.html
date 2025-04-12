@@ -2,7 +2,7 @@
 <html>
   <head>
     <base target="_top">
-    <title>図書返却システム</title>
+    <title>貸出書籍検索システム</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
       body { font-family: sans-serif; padding: 10px; }
@@ -15,33 +15,40 @@
       #interactive.viewport > canvas, #interactive.viewport > video { max-width: 100%; width: 100%; }
       canvas.drawing, canvas.drawingBuffer { position: absolute; left: 0; top: 0; }
       #message { margin-top: 15px; font-weight: bold; }
-      #book-details { margin-top: 10px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9; }
+      #rental-records { margin-top: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+      th { background-color: #f2f2f2; }
+      tr:hover { background-color: #f5f5f5; }
+      .no-records { font-style: italic; color: #666; }
+      /* デバッグログ用スタイル */
+      #debug-log { margin-top: 20px; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5; max-height: 300px; overflow-y: auto; display: none; }
+      #log-content { white-space: pre-wrap; font-family: monospace; font-size: 12px; }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>図書返却</h1>
+      <h1>貸出書籍検索</h1>
 
       <div class="form-group">
-        <label for="book-id">返却する本の書籍ID</label>
+        <label for="book-id">検索する書籍ID</label>
         <button id="scan-book-id-button">書籍IDをスキャン</button>
         <input type="text" id="book-id" name="bookId" placeholder="スキャンするか手入力してください">
         <div id="interactive" class="viewport"></div>
       </div>
 
-      <div id="book-details" style="display: none;">
-        <p><strong>書籍名:</strong> <span id="book-title"></span></p>
-        <p><strong>貸出者:</strong> <span id="user-name"></span></p>
-        <p><strong>貸出日:</strong> <span id="lending-date"></span></p>
-      </div>
-
-      <button onclick="submitReturn()">返却処理</button>
+      <button onclick="searchRentalRecords()">検索</button>
       <p id="message"></p>
+
+      <div id="rental-records" style="display: none;">
+        <h2>検索結果</h2>
+        <div id="records-container"></div>
+      </div>
       
       <!-- デバッグログ表示エリア -->
-      <div id="debug-log" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5; max-height: 300px; overflow-y: auto; display: none;">
+      <div id="debug-log">
         <h3>デバッグログ</h3>
-        <pre id="log-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px;"></pre>
+        <pre id="log-content"></pre>
         <button onclick="toggleDebugLog()">ログ表示切替</button>
       </div>
     </div>
@@ -53,7 +60,7 @@
 
       // スキャンボタンの処理
       document.getElementById('scan-book-id-button').addEventListener('click', () => {
-        toggleScanner('interactive', 'book-id'); // Changed ID
+        toggleScanner('interactive', 'book-id');
       });
 
       // スキャナーの表示/非表示を切り替える関数
@@ -81,14 +88,13 @@
               width: 480,
               facingMode: "environment"
             },
-             area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
+            area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
           },
           locator: { patchSize: "medium", halfSample: true },
           numOfWorkers: navigator.hardwareConcurrency || 4,
           decoder : { readers : [ // 書籍IDで使いそうなバーコード形式を指定
               'code_128_reader',
               'code_39_reader'
-              // 'ean_reader' // ISBN用なので削除
             ] },
           locate: true
         }, function(err) {
@@ -114,7 +120,7 @@
           stopScanner(targetElementId);
           document.getElementById(targetElementId).style.display = 'none';
           isScanning = false;
-          fetchLendingInfo(code); // 書籍IDが読み取れたら貸出情報を取得
+          searchRentalRecords(); // 書籍IDが読み取れたら自動的に検索
         });
       }
 
@@ -152,108 +158,91 @@
         logContent.scrollTop = logContent.scrollHeight;
       }
 
-      // 貸出情報を取得する関数 (GAS側を呼び出す)
-      function fetchLendingInfo(bookId) { // Changed parameter name
-        if (!bookId) return;
-        setMessage("貸出情報を検索中...");
-        hideBookDetails(); // 詳細を一旦隠す
-        addLog(`書籍ID [${bookId}] の貸出情報を検索します...`);
+      // 貸出記録を検索する関数
+      function searchRentalRecords() {
+        const bookId = document.getElementById('book-id').value.trim();
+        if (!bookId) {
+          setMessage("書籍IDを入力またはスキャンしてください。");
+          return;
+        }
+
+        setMessage("貸出記録を検索中...");
+        document.getElementById('rental-records').style.display = 'none';
+        document.getElementById('records-container').innerHTML = '';
+        
+        addLog(`書籍ID [${bookId}] の貸出記録を検索します...`);
         
         google.script.run
           .withSuccessHandler((result) => {
             if (result && result.logs) {
               // ログ情報がある場合は表示
               result.logs.forEach(log => addLog(log));
-              
-              // 貸出情報がある場合は表示
-              if (result.lendingInfo) {
-                displayBookDetails(result.lendingInfo);
-                setMessage("貸出情報が見つかりました。内容を確認して返却処理を行ってください。");
-                addLog("貸出情報が見つかりました。");
-              } else {
-                setMessage("この本の未返却の貸出記録が見つかりませんでした。書籍IDを確認してください。");
-                addLog("貸出情報が見つかりませんでした。");
-              }
-            } else if (result) {
-              // 従来の形式（ログなし）の場合
-              displayBookDetails(result);
-              setMessage("貸出情報が見つかりました。内容を確認して返却処理を行ってください。");
+            }
+            
+            if (result && result.records && result.records.length > 0) {
+              displayRentalRecords(result.records);
+              setMessage(`書籍ID [${bookId}] の貸出記録が見つかりました。`);
+              addLog(`${result.records.length}件の貸出記録が見つかりました。`);
             } else {
-              setMessage("この本の未返却の貸出記録が見つかりませんでした。書籍IDを確認してください。");
+              setMessage(`書籍ID [${bookId}] の貸出記録が見つかりませんでした。`);
+              document.getElementById('rental-records').style.display = 'block';
+              document.getElementById('records-container').innerHTML = '<p class="no-records">該当する貸出記録はありません。</p>';
+              addLog("貸出記録が見つかりませんでした。");
             }
           })
           .withFailureHandler(error => {
-            setMessage(`貸出情報の取得エラー: ${error.message}`);
+            setMessage(`検索エラー: ${error.message}`);
             addLog(`エラー: ${error.message}`);
-            console.error("貸出情報取得エラー:", error);
+            console.error("検索エラー:", error);
           })
-          .getLendingInfo(bookId); // Changed parameter name
+          .findRentalRecords(bookId);
       }
 
-      // 書籍詳細を表示
-      function displayBookDetails(info) {
-          document.getElementById('book-title').textContent = info.bookTitle || 'N/A';
-          document.getElementById('user-name').textContent = info.userName || 'N/A';
-          // 日付を読みやすい形式にフォーマット (YYYY/MM/DD)
-          const lendingDate = info.lendingDate ? new Date(info.lendingDate).toLocaleDateString() : 'N/A';
-          document.getElementById('lending-date').textContent = lendingDate;
-          document.getElementById('book-details').style.display = 'block';
-      }
-
-       // 書籍詳細を非表示
-      function hideBookDetails() {
-          document.getElementById('book-details').style.display = 'none';
-          document.getElementById('book-title').textContent = '';
-          document.getElementById('user-name').textContent = '';
-          document.getElementById('lending-date').textContent = '';
-      }
-
-
-      // 返却処理実行 (GAS側を呼び出す)
-      function submitReturn() {
-        const bookId = document.getElementById('book-id').value.trim(); // Changed from isbn
-        if (!bookId) {
-          setMessage("書籍IDを入力またはスキャンしてください。"); // Updated message
-          return;
-        }
-        // 書籍詳細が表示されていない（=貸出情報が見つかっていない）場合は処理しない
-        if (document.getElementById('book-details').style.display === 'none') {
-            setMessage("先に書籍IDを入力またはスキャンして貸出情報を確認してください。"); // Updated message
-            return;
-        }
-
-        addLog(`書籍ID [${bookId}] の返却処理を開始します...`);
-        setMessage("返却処理を実行中...");
+      // 貸出記録を表示する関数
+      function displayRentalRecords(records) {
+        const container = document.getElementById('records-container');
         
-        google.script.run
-          .withSuccessHandler(result => {
-            if (result && result.logs) {
-              // ログ情報がある場合は表示
-              result.logs.forEach(log => addLog(log));
-              
-              if (result.message) {
-                setMessage(result.message);
-                if (result.message.includes("成功")) {
-                  document.getElementById('book-id').value = ''; // 成功したら書籍IDをクリア
-                  hideBookDetails(); // 詳細を隠す
-                  addLog("返却処理が完了しました。");
-                }
-              }
-            } else {
-              // 従来の形式（文字列のみ）の場合
-              setMessage(result);
-              if (result.includes("成功")) {
-                document.getElementById('book-id').value = ''; // 成功したら書籍IDをクリア
-                hideBookDetails(); // 詳細を隠す
-              }
-            }
-          })
-          .withFailureHandler(error => {
-            setMessage(`返却処理失敗: ${error.message}`);
-            addLog(`エラー: ${error.message}`);
-            console.error("返却処理エラー:", error);
-          })
-          .processReturnForm(bookId); // Changed parameter name
+        // テーブルを作成
+        let html = `
+          <table>
+            <thead>
+              <tr>
+                <th>書籍ID</th>
+                <th>書籍名</th>
+                <th>利用者名</th>
+                <th>貸出日時</th>
+                <th>返却予定日</th>
+                <th>返却状況</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        // レコードごとに行を追加
+        records.forEach(record => {
+          // 日付をフォーマット
+          const lendingDate = record.lendingDate ? new Date(record.lendingDate).toLocaleString() : 'N/A';
+          const dueDate = record.dueDate ? new Date(record.dueDate).toLocaleString() : 'N/A';
+          
+          html += `
+            <tr>
+              <td>${record.bookId || 'N/A'}</td>
+              <td>${record.bookTitle || 'N/A'}</td>
+              <td>${record.userName || 'N/A'}</td>
+              <td>${lendingDate}</td>
+              <td>${dueDate}</td>
+              <td>${record.status || 'N/A'}</td>
+            </tr>
+          `;
+        });
+        
+        html += `
+            </tbody>
+          </table>
+        `;
+        
+        container.innerHTML = html;
+        document.getElementById('rental-records').style.display = 'block';
       }
 
       function setMessage(msg) {
@@ -262,12 +251,15 @@
 
       // 初期状態ではスキャナービューポートを非表示にする
       document.getElementById('interactive').style.display = 'none';
+      // 初期状態ではデバッグログを非表示にする
+      document.getElementById('debug-log').style.display = 'none';
 
-      // 書籍IDが手入力された場合にも情報取得を試みる
-      document.getElementById('book-id').addEventListener('change', (event) => { // Changed ID
-          if (!isScanning) fetchLendingInfo(event.target.value.trim());
+      // 書籍IDが手入力された場合にEnterキーで検索を実行
+      document.getElementById('book-id').addEventListener('keypress', (event) => {
+        if (event.key === 'Enter' && !isScanning) {
+          searchRentalRecords();
+        }
       });
-
     </script>
   </body>
 </html>
