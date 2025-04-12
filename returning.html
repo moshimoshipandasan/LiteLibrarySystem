@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>図書返却システム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { font-family: sans-serif; padding: 10px; }
+      .container { max-width: 600px; margin: auto; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; }
+      input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+      button { padding: 10px 15px; cursor: pointer; margin-right: 5px; }
+      #interactive.viewport { position: relative; width: 100%; height: auto; overflow: hidden; margin-top: 10px; border: 1px solid #ccc;}
+      #interactive.viewport > canvas, #interactive.viewport > video { max-width: 100%; width: 100%; }
+      canvas.drawing, canvas.drawingBuffer { position: absolute; left: 0; top: 0; }
+      #message { margin-top: 15px; font-weight: bold; }
+      #book-details { margin-top: 10px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>図書返却</h1>
+
+      <div class="form-group">
+        <label for="book-id">返却する本の書籍ID</label>
+        <button id="scan-book-id-button">書籍IDをスキャン</button>
+        <input type="text" id="book-id" name="bookId" placeholder="スキャンするか手入力してください">
+        <div id="interactive" class="viewport"></div>
+      </div>
+
+      <div id="book-details" style="display: none;">
+        <p><strong>書籍名:</strong> <span id="book-title"></span></p>
+        <p><strong>貸出者:</strong> <span id="user-name"></span></p>
+        <p><strong>貸出日:</strong> <span id="lending-date"></span></p>
+      </div>
+
+      <button onclick="submitReturn()">返却処理</button>
+      <p id="message"></p>
+
+    </div>
+
+    <!-- バーコード読み取りライブラリ (QuaggaJSを使用) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script>
+      let isScanning = false;
+
+      // スキャンボタンの処理
+      document.getElementById('scan-book-id-button').addEventListener('click', () => {
+        toggleScanner('interactive', 'book-id'); // Changed ID
+      });
+
+      // スキャナーの表示/非表示を切り替える関数
+      function toggleScanner(targetElementId, inputFieldId) {
+        const targetViewport = document.getElementById(targetElementId);
+        if (!isScanning) {
+          targetViewport.style.display = 'block';
+          startScanner(targetElementId, inputFieldId);
+          isScanning = true;
+        } else {
+          stopScanner(targetElementId);
+          targetViewport.style.display = 'none';
+          isScanning = false;
+        }
+      }
+
+      function startScanner(targetElementId, inputFieldId) {
+        setMessage("カメラを起動しています...");
+        Quagga.init({
+          inputStream : {
+            name : "Live",
+            type : "LiveStream",
+            target: document.getElementById(targetElementId),
+            constraints: {
+              width: 480,
+              facingMode: "environment"
+            },
+             area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
+          },
+          locator: { patchSize: "medium", halfSample: true },
+          numOfWorkers: navigator.hardwareConcurrency || 4,
+          decoder : { readers : [ // 書籍IDで使いそうなバーコード形式を指定
+              'code_128_reader',
+              'code_39_reader'
+              // 'ean_reader' // ISBN用なので削除
+            ] },
+          locate: true
+        }, function(err) {
+            if (err) {
+                console.error(err);
+                setMessage(`スキャナーの初期化に失敗: ${err.name}. カメラへのアクセスを許可してください。`);
+                document.getElementById(targetElementId).style.display = 'none';
+                isScanning = false;
+                return;
+            }
+            console.log("スキャナー初期化完了");
+            setMessage("バーコードをカメラに向けてください。");
+            Quagga.start();
+        });
+
+        Quagga.onProcessed(function(result) { /* 描画処理は省略 */ });
+
+        Quagga.onDetected(function(result) {
+          const code = result.codeResult.code;
+          console.log("バーコード検出:", code);
+          document.getElementById(inputFieldId).value = code;
+          setMessage(`コード「${code}」を読み取りました。`);
+          stopScanner(targetElementId);
+          document.getElementById(targetElementId).style.display = 'none';
+          isScanning = false;
+          fetchLendingInfo(code); // 書籍IDが読み取れたら貸出情報を取得
+        });
+      }
+
+      function stopScanner(targetElementId) {
+         if (Quagga.initialized) {
+            Quagga.stop();
+            const viewport = document.getElementById(targetElementId);
+            if (viewport) {
+              const canvas = viewport.querySelector('canvas');
+              if (canvas) viewport.removeChild(canvas);
+              const video = viewport.querySelector('video');
+              if (video) viewport.removeChild(video);
+            }
+            console.log("スキャナー停止");
+         }
+      }
+
+      // 貸出情報を取得する関数 (GAS側を呼び出す)
+      function fetchLendingInfo(bookId) { // Changed parameter name
+        if (!bookId) return;
+        setMessage("貸出情報を検索中...");
+        hideBookDetails(); // 詳細を一旦隠す
+        google.script.run
+          .withSuccessHandler(lendingInfo => {
+            if (lendingInfo) {
+              displayBookDetails(lendingInfo);
+              setMessage("貸出情報が見つかりました。内容を確認して返却処理を行ってください。");
+            } else {
+               setMessage("この本の未返却の貸出記録が見つかりませんでした。書籍IDを確認してください。"); // Updated message
+            }
+          })
+          .withFailureHandler(error => {
+            setMessage(`貸出情報の取得エラー: ${error.message}`);
+            console.error("貸出情報取得エラー:", error);
+          })
+          .getLendingInfo(bookId); // Changed parameter name
+      }
+
+      // 書籍詳細を表示
+      function displayBookDetails(info) {
+          document.getElementById('book-title').textContent = info.bookTitle || 'N/A';
+          document.getElementById('user-name').textContent = info.userName || 'N/A';
+          // 日付を読みやすい形式にフォーマット (YYYY/MM/DD)
+          const lendingDate = info.lendingDate ? new Date(info.lendingDate).toLocaleDateString() : 'N/A';
+          document.getElementById('lending-date').textContent = lendingDate;
+          document.getElementById('book-details').style.display = 'block';
+      }
+
+       // 書籍詳細を非表示
+      function hideBookDetails() {
+          document.getElementById('book-details').style.display = 'none';
+          document.getElementById('book-title').textContent = '';
+          document.getElementById('user-name').textContent = '';
+          document.getElementById('lending-date').textContent = '';
+      }
+
+
+      // 返却処理実行 (GAS側を呼び出す)
+      function submitReturn() {
+        const bookId = document.getElementById('book-id').value.trim(); // Changed from isbn
+        if (!bookId) {
+          setMessage("書籍IDを入力またはスキャンしてください。"); // Updated message
+          return;
+        }
+        // 書籍詳細が表示されていない（=貸出情報が見つかっていない）場合は処理しない
+        if (document.getElementById('book-details').style.display === 'none') {
+            setMessage("先に書籍IDを入力またはスキャンして貸出情報を確認してください。"); // Updated message
+            return;
+        }
+
+
+        setMessage("返却処理を実行中...");
+        google.script.run
+          .withSuccessHandler(response => {
+            setMessage(response);
+            if (response.includes("成功")) {
+               document.getElementById('book-id').value = ''; // 成功したら書籍IDをクリア
+               hideBookDetails(); // 詳細を隠す
+            }
+          })
+          .withFailureHandler(error => {
+            setMessage(`返却処理失敗: ${error.message}`);
+            console.error("返却処理エラー:", error);
+          })
+          .processReturnForm(bookId); // Changed parameter name
+      }
+
+      function setMessage(msg) {
+        document.getElementById('message').innerText = msg;
+      }
+
+      // 初期状態ではスキャナービューポートを非表示にする
+      document.getElementById('interactive').style.display = 'none';
+
+      // 書籍IDが手入力された場合にも情報取得を試みる
+      document.getElementById('book-id').addEventListener('change', (event) => { // Changed ID
+          if (!isScanning) fetchLendingInfo(event.target.value.trim());
+      });
+
+    </script>
+  </body>
+</html>
