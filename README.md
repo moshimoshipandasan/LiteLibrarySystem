@@ -20,6 +20,11 @@
 *   Googleアカウント
 *   Google スプレッドシート
 
+## 参照スプレッドシート
+
+このシステムの参照用スプレッドシートは以下のURLからアクセスできます：
+https://docs.google.com/spreadsheets/d/1iK6ftb6gqd8pyhUwGHwbiBPQ1crmTCxXbbXE1Zpbnzg/edit?usp=sharing
+
 ## セットアップ手順
 
 ### 1. Google スプレッドシートの準備
