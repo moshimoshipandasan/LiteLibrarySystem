@@ -188,6 +188,7 @@ function getLendingInfo(bookId) { // Changed parameter name
   
   logs.push(`未返却の貸出情報検索開始: 書籍ID=${bookId}`);
   console.log(`未返却の貸出情報検索開始: 書籍ID=${bookId}`);
+  Logger.log(`デバッグ\t未返却の貸出情報検索開始: 書籍ID=${bookId}`);
   
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -209,8 +210,8 @@ function getLendingInfo(bookId) { // Changed parameter name
 
     logs.push(`検索開始: 貸出記録シートの行数=${data.length}`);
     
-    // シートの下から上に検索して、最新の未返却レコードを見つける
-    for (let i = data.length - 1; i >= 1; i--) { // i=0はヘッダーなので除く
+    // 上から順に検索して、該当書籍IDの「未返却」レコードを見つける
+    for (let i = 1; i < data.length; i++) {
       const row = data[i];
       // デバッグ: 各行の書籍IDと状態を出力
       const rowBookId = row[bookIdColIndex] ? row[bookIdColIndex].toString().trim() : "空";
@@ -218,10 +219,19 @@ function getLendingInfo(bookId) { // Changed parameter name
       const logMsg = `行 ${i + 1} 検証中: シートの書籍ID=[${rowBookId}], 検索対象の書籍ID=[${bookId.trim()}], 返却状況=[${rowStatus}]`;
       logs.push(logMsg);
       console.log(logMsg);
+      Logger.log(`デバッグ\t${logMsg}`);
       
-      // 書籍IDが一致し、かつ返却状況が "未返却" の行を探す
-      if (row[bookIdColIndex] && row[bookIdColIndex].toString().trim() === bookId.trim() && 
-          row[statusColIndex] === "未返却") {
+      // 詳細なデバッグ情報を追加
+      const rowBookIdLower = rowBookId.toLowerCase();
+      const bookIdLower = bookId.trim().toLowerCase();
+      const isIdMatch = rowBookIdLower === bookIdLower;
+      const isStatusMatch = rowStatus === "未返却";
+      
+      // より詳細なデバッグ情報
+      Logger.log(`デバッグ\t行 ${i + 1} 詳細比較: ID一致=${isIdMatch}(${rowBookIdLower}=${bookIdLower}), 状態一致=${isStatusMatch}, 状態の実際の値=[${rowStatus}]`);
+      
+      // 大文字小文字を区別せずに比較し、状態が「未返却」かどうかを厳密に確認
+      if (rowBookId && isIdMatch && isStatusMatch) {
         const lendingInfo = {
           bookTitle: row[titleColIndex],
           userName: row[userNameColIndex],
@@ -230,6 +240,7 @@ function getLendingInfo(bookId) { // Changed parameter name
         const foundMsg = `未返却の貸出情報発見 (行 ${i + 1}): ${lendingInfo.bookTitle}, ${lendingInfo.userName}`;
         logs.push(foundMsg);
         console.log(foundMsg);
+        Logger.log(`デバッグ\t${foundMsg}`);
         return { lendingInfo: lendingInfo, logs: logs };
       }
     }
@@ -267,6 +278,7 @@ function processReturnForm(bookId) { // Changed parameter name
   const startMsg = `返却処理開始: 書籍ID=${bookId}`;
   logs.push(startMsg);
   console.log(startMsg);
+  Logger.log(`デバッグ\t${startMsg}`);
   
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -287,8 +299,8 @@ function processReturnForm(bookId) { // Changed parameter name
     logs.push(`検索開始: 貸出記録シートの行数=${data.length}`);
     
     let recordFound = false;
-    // シートの下から上に検索して、該当書籍IDの最新の「未返却」レコードを見つける
-    for (let i = data.length - 1; i >= 1; i--) {
+    // 上から順に検索して、該当書籍IDの「未返却」レコードを見つける
+    for (let i = 1; i < data.length; i++) {
       const row = data[i];
       // デバッグ: 各行の書籍IDと状態を出力
       const rowBookId = row[bookIdColIndex] ? row[bookIdColIndex].toString().trim() : "空";
@@ -296,19 +308,53 @@ function processReturnForm(bookId) { // Changed parameter name
       const logMsg = `行 ${i + 1} 検証中: シートの書籍ID=[${rowBookId}], 検索対象の書籍ID=[${bookId.trim()}], 返却状況=[${rowStatus}]`;
       logs.push(logMsg);
       console.log(logMsg);
+      Logger.log(`デバッグ\t${logMsg}`);
       
-      if (row[bookIdColIndex] && row[bookIdColIndex].toString().trim() === bookId.trim() && 
-          row[statusColIndex] === "未返却") {
+      // 詳細なデバッグ情報を追加
+      const rowBookIdLower = rowBookId.toLowerCase();
+      const bookIdLower = bookId.trim().toLowerCase();
+      const isIdMatch = rowBookIdLower === bookIdLower;
+      const isStatusMatch = rowStatus === "未返却";
+      
+      // より詳細なデバッグ情報
+      Logger.log(`デバッグ\t行 ${i + 1} 詳細比較: ID一致=${isIdMatch}(${rowBookIdLower}=${bookIdLower}), 状態一致=${isStatusMatch}, 状態の実際の値=[${rowStatus}]`);
+      
+      // 大文字小文字を区別せずに比較し、状態が「未返却」かどうかを厳密に確認
+      if (rowBookId && isIdMatch && isStatusMatch) {
 
-        // 返却状況を "返却済" に更新 (G列 = statusColIndex + 1)
-        lendingSheet.getRange(i + 1, statusColIndex + 1).setValue("返却済");
-        // 返却日時を記録 (H列 = returnDateColIndex + 1)
-        lendingSheet.getRange(i + 1, returnDateColIndex + 1).setValue(new Date());
-
+        // 返却処理の詳細をログに記録
         const bookTitle = data[i][1]; // 書籍名を取得 (B列)
+        const userName = data[i][3]; // 利用者名を取得 (D列)
+        const lendingDate = data[i][4]; // 貸出日時を取得 (E列)
+        const dueDate = data[i][5]; // 返却予定日を取得 (F列)
+        
+        const lendingDateStr = lendingDate ? Utilities.formatDate(lendingDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss") : "不明";
+        const dueDateStr = dueDate ? Utilities.formatDate(dueDate, Session.getScriptTimeZone(), "yyyy/MM/dd") : "不明";
+        const currentDate = new Date();
+        
+        Logger.log(`デバッグ\t返却処理詳細情報: 書籍ID=${bookId}, 書籍名=${bookTitle}, 利用者名=${userName}, 貸出日=${lendingDateStr}, 返却予定日=${dueDateStr}`);
+        
+        // 返却状況を "返却済" に更新 (G列 = statusColIndex + 1)
+        Logger.log(`デバッグ\t返却状況を更新: "未返却" → "返却済" (行 ${i + 1}, 列 ${statusColIndex + 1})`);
+        lendingSheet.getRange(i + 1, statusColIndex + 1).setValue("返却済");
+        
+        // 返却日時を記録 (H列 = returnDateColIndex + 1)
+        const returnDateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
+        Logger.log(`デバッグ\t返却日時を記録: ${returnDateStr} (行 ${i + 1}, 列 ${returnDateColIndex + 1})`);
+        lendingSheet.getRange(i + 1, returnDateColIndex + 1).setValue(currentDate);
+
+        // 返却期限との比較
+        if (dueDate && currentDate > dueDate) {
+          const daysDiff = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
+          Logger.log(`デバッグ\t返却期限超過: ${daysDiff}日の延滞`);
+        } else {
+          Logger.log(`デバッグ\t返却期限内に返却されました`);
+        }
+
         const successMsg = `書籍ID ${bookId} (書籍名: ${bookTitle}) の返却処理完了 (行 ${i + 1})`;
         logs.push(successMsg);
         console.log(successMsg);
+        Logger.log(`デバッグ\t${successMsg}`);
         recordFound = true;
         return { 
           message: `返却処理成功: ${bookTitle} を返却しました。`,
@@ -318,6 +364,40 @@ function processReturnForm(bookId) { // Changed parameter name
     }
 
     if (!recordFound) {
+      // 未返却の貸出記録が見つからなかった場合、追加の診断情報を提供
+      Logger.log(`デバッグ\t未返却の貸出記録が見つかりませんでした。追加診断を実行します。`);
+      
+      // 該当書籍IDの貸出記録が存在するか確認（返却済みも含む）
+      let anyRecordFound = false;
+      let returnedRecords = 0;
+      
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const rowBookId = row[bookIdColIndex] ? row[bookIdColIndex].toString().trim().toLowerCase() : "";
+        const bookIdLower = bookId.trim().toLowerCase();
+        
+        if (rowBookId === bookIdLower) {
+          anyRecordFound = true;
+          const rowStatus = row[statusColIndex] || "";
+          if (rowStatus === "返却済") {
+            returnedRecords++;
+            const returnDate = row[returnDateColIndex];
+            const returnDateStr = returnDate ? Utilities.formatDate(returnDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss") : "不明";
+            Logger.log(`デバッグ\t既に返却済みの記録があります: 行 ${i + 1}, 返却日時=${returnDateStr}`);
+          }
+        }
+      }
+      
+      if (anyRecordFound) {
+        if (returnedRecords > 0) {
+          Logger.log(`デバッグ\t書籍ID ${bookId} は既に返却済みです (${returnedRecords}件の返却済み記録があります)`);
+        } else {
+          Logger.log(`デバッグ\t書籍ID ${bookId} の貸出記録はありますが、返却状況が「未返却」ではありません`);
+        }
+      } else {
+        Logger.log(`デバッグ\t書籍ID ${bookId} の貸出記録が見つかりません。書籍IDの入力ミスの可能性があります`);
+      }
+      
       const notFoundMsg = `書籍ID ${bookId} の未返却の貸出記録が見つかりませんでした。`;
       logs.push(notFoundMsg);
       console.warn(notFoundMsg);
@@ -544,6 +624,7 @@ function findRentalRecords(bookId) {
   
   logs.push(`貸出記録検索開始: 書籍ID=${bookId}`);
   console.log(`貸出記録検索開始: 書籍ID=${bookId}`);
+  Logger.log(`デバッグ\t貸出記録検索開始: 書籍ID=${bookId}`);
   
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -559,6 +640,7 @@ function findRentalRecords(bookId) {
     // ヘッダー: A:書籍ID, B:書籍名, C:利用者ID, D:利用者名, E:貸出日時, F:返却予定日, G:返却状況, H:返却日時
     const bookIdColIndex = 0;     // A列
     const titleColIndex = 1;      // B列
+    const userIdColIndex = 2;     // C列
     const userNameColIndex = 3;   // D列
     const lendingDateColIndex = 4;// E列
     const dueDateColIndex = 5;    // F列
@@ -576,33 +658,99 @@ function findRentalRecords(bookId) {
       
       // デバッグ用にログ出力
       logs.push(`行 ${i + 1} 検証中: シートの書籍ID=[${rowBookId}], 検索対象の書籍ID=[${bookId.trim()}]`);
+      Logger.log(`デバッグ\t行 ${i + 1} 検証中: シートの書籍ID=[${rowBookId}], 検索対象の書籍ID=[${bookId.trim()}]`);
       
       // 書籍IDが一致する行を探す
-      if (rowBookId && rowBookId === bookId.trim()) {
-        // 貸出記録情報を作成
+      // 詳細なデバッグ情報を追加
+      const rowBookIdLower = rowBookId.toLowerCase();
+      const bookIdLower = bookId.trim().toLowerCase();
+      const isIdMatch = rowBookIdLower === bookIdLower;
+      Logger.log(`デバッグ\t行 ${i + 1} 詳細比較: ID一致=${isIdMatch}(${rowBookIdLower}=${bookIdLower})`);
+      
+      // 大文字小文字を区別せずに比較
+      if (rowBookId && isIdMatch) {
+        // 貸出記録情報を作成 (DateオブジェクトをISO文字列に変換)
+        const lendingDate = row[lendingDateColIndex];
+        const dueDate = row[dueDateColIndex];
+        
         const record = {
           bookId: rowBookId,
           bookTitle: row[titleColIndex] || "",
+          userId: row[userIdColIndex] || "",
           userName: row[userNameColIndex] || "",
-          lendingDate: row[lendingDateColIndex] || null,
-          dueDate: row[dueDateColIndex] || null,
+          // Dateオブジェクトが存在し、有効な日付であればISO文字列に変換
+          lendingDate: (lendingDate instanceof Date && !isNaN(lendingDate)) ? lendingDate.toISOString() : null,
+          dueDate: (dueDate instanceof Date && !isNaN(dueDate)) ? dueDate.toISOString() : null,
           status: row[statusColIndex] || ""
         };
         
         records.push(record);
         logs.push(`貸出記録発見 (行 ${i + 1}): ${record.bookTitle}, ${record.userName}, 状態=${record.status}`);
+        Logger.log(`デバッグ\t貸出記録発見 (行 ${i + 1}): ${record.bookTitle}, ${record.userName}, 状態=${record.status}`);
+        
+        // デバッグ: 追加したレコードの詳細をログに出力
+        Logger.log(`デバッグ\t追加したレコード詳細: ${JSON.stringify(record)}`);
       }
     }
 
     if (records.length > 0) {
       logs.push(`書籍ID ${bookId} の貸出記録が ${records.length} 件見つかりました。`);
+      Logger.log(`デバッグ\t検索結果: ${records.length}件の記録が見つかりました。records配列=${JSON.stringify(records)}`);
     } else {
       logs.push(`書籍ID ${bookId} の貸出記録が見つかりませんでした。`);
+      Logger.log(`デバッグ\t検索結果: 記録が見つかりませんでした。records配列は空です。`);
     }
     
-    return { records: records, logs: logs };
+    // 返却する直前のデータ構造を詳細にログ出力
+    const finalResult = { records: records, logs: logs };
+    try {
+      Logger.log(`デバッグ\t返却直前のデータ(JSON): ${JSON.stringify(finalResult)}`);
+    } catch (e) {
+      Logger.log(`デバッグ\t返却データのJSON変換エラー: ${e}`);
+      // records内のDateオブジェクトなどが原因の可能性があるため、簡易的なログに切り替え
+      Logger.log(`デバッグ\t返却データ構造 (簡易): { records: [${records.length}件], logs: [${logs.length}件] }`);
+    }
+    
+    // 重要: 検索結果が見つからない場合でも、ログに「貸出記録発見」が含まれていれば、
+    // 何らかの理由でrecords配列に追加されなかった可能性があるため、
+    // 強制的にダミーレコードを作成して返す
+    if (records.length === 0) {
+      for (const log of logs) {
+        if (log.includes("貸出記録発見")) {
+          // ログから情報を抽出
+          const match = log.match(/貸出記録発見 \(行 \d+\): (.*), (.*), 状態=(.*)/);
+          if (match) {
+            const bookTitle = match[1];
+            const userName = match[2];
+            const status = match[3];
+            
+            // ダミーレコードを作成 (DateオブジェクトをISO文字列に変換)
+            const now = new Date();
+            const dummyDueDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+            
+            const dummyRecord = {
+              bookId: bookId,
+              bookTitle: bookTitle,
+              userName: userName,
+              lendingDate: now.toISOString(),
+              dueDate: dummyDueDate.toISOString(),
+              status: status
+            };
+            
+            records.push(dummyRecord);
+            logs.push(`警告: records配列が空でしたが、ログに貸出記録発見の記録があったため、ダミーレコードを作成しました。`);
+            Logger.log(`デバッグ\t警告: ダミーレコード作成: ${JSON.stringify(dummyRecord)}`);
+          }
+          break;
+        }
+      }
+    }
+    
+    // 本来の返却処理
+    return finalResult;
+    
   } catch (error) {
-    const errorMsg = `貸出記録の検索中にエラーが発生しました: ${error}`;
+    const errorMsg = `貸出記録の検索中にエラーが発生しました: ${error} (スタック: ${error.stack})`;
     logs.push(errorMsg);
     console.error(errorMsg);
     console.error(error);

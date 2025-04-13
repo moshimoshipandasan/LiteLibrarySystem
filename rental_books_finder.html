@@ -58,6 +58,14 @@
     <script>
       let isScanning = false;
 
+      // ページ読み込み完了時の処理
+      window.onload = function() {
+        // 初期状態ではスキャナービューポートを非表示にする
+        document.getElementById('interactive').style.display = 'none';
+        // 初期状態ではデバッグログを非表示にする
+        document.getElementById('debug-log').style.display = 'none';
+      };
+
       // スキャンボタンの処理
       document.getElementById('scan-book-id-button').addEventListener('click', () => {
         toggleScanner('interactive', 'book-id');
@@ -174,32 +182,105 @@
         
         google.script.run
           .withSuccessHandler((result) => {
+            console.log("検索結果:", result); // デバッグ用
+            addLog(`検索結果データ構造: ${JSON.stringify(result)}`); // デバッグ用
+            
             if (result && result.logs) {
               // ログ情報がある場合は表示
               result.logs.forEach(log => addLog(log));
             }
             
-            if (result && result.records && result.records.length > 0) {
-              displayRentalRecords(result.records);
-              setMessage(`書籍ID [${bookId}] の貸出記録が見つかりました。`);
-              addLog(`${result.records.length}件の貸出記録が見つかりました。`);
+            // 詳細なデバッグ情報
+            if (result) {
+              addLog(`result オブジェクト: ${Object.keys(result).join(', ')}`);
+              if (result.records) {
+                addLog(`records 配列の長さ: ${result.records.length}`);
+                if (result.records.length > 0) {
+                  addLog(`最初のレコード: ${JSON.stringify(result.records[0])}`);
+                }
+              } else {
+                addLog(`records プロパティが存在しません`);
+              }
             } else {
+              addLog(`result オブジェクトが null または undefined です`);
+            }
+            
+            // --- 結果処理ロジックの改善 ---
+            let recordsToDisplay = [];
+            let foundViaRecords = false;
+            let foundViaLogs = false;
+
+            // 1. result と result.records が正常に存在するか確認
+            if (result && result.records && Array.isArray(result.records) && result.records.length > 0) {
+              recordsToDisplay = result.records;
+              foundViaRecords = true;
+              addLog(`${result.records.length}件の貸出記録をサーバーから直接受け取りました。`);
+            } else {
+              addLog("サーバーから返された records 配列は空または無効です。ログからの復元を試みます。");
+              // 2. records がダメなら、logs から「貸出記録発見」を探す
+              if (result && result.logs && Array.isArray(result.logs)) {
+                for (const log of result.logs) {
+                  if (log.includes("貸出記録発見")) {
+                    foundViaLogs = true;
+                    // ログから情報を抽出してダミーレコードを作成
+                    const match = log.match(/貸出記録発見 \(行 \d+\): (.*), (.*), 状態=(.*)/);
+                    if (match) {
+                      const bookTitle = match[1];
+                      const userName = match[2];
+                      const status = match[3];
+                      
+                      // ダミーレコードを追加 (日付は文字列として扱う)
+                      recordsToDisplay.push({
+                        bookId: bookId,
+                        bookTitle: bookTitle,
+                        userName: userName,
+                        lendingDate: "（ログから復元）", // ダミーデータを示す
+                        dueDate: "（ログから復元）",     // ダミーデータを示す
+                        status: status
+                      });
+                      addLog(`ログから貸出記録情報を復元しました: ${bookTitle}, ${userName}, ${status}`);
+                    }
+                  }
+                }
+                if (foundViaLogs && recordsToDisplay.length === 0) {
+                    addLog("ログに「貸出記録発見」はありましたが、詳細情報の抽出に失敗しました。");
+                }
+              } else {
+                  addLog("logs 配列も存在しないか無効です。");
+              }
+            }
+
+            // 3. 表示処理
+            if (recordsToDisplay.length > 0) {
+              displayRentalRecords(recordsToDisplay);
+              setMessage(`書籍ID [${bookId}] の貸出記録が見つかりました。${foundViaRecords ? '' : ' (ログから復元)'}`);
+              addLog(`${recordsToDisplay.length}件の貸出記録を表示します。`);
+            } else {
+              // recordsにもlogsにも情報がなかった場合
               setMessage(`書籍ID [${bookId}] の貸出記録が見つかりませんでした。`);
               document.getElementById('rental-records').style.display = 'block';
               document.getElementById('records-container').innerHTML = '<p class="no-records">該当する貸出記録はありません。</p>';
-              addLog("貸出記録が見つかりませんでした。");
+              addLog("表示できる貸出記録が見つかりませんでした。");
             }
+            // --- 結果処理ロジックここまで ---
           })
-          .withFailureHandler(error => {
-            setMessage(`検索エラー: ${error.message}`);
-            addLog(`エラー: ${error.message}`);
-            console.error("検索エラー:", error);
+          .withFailureHandler(function(error) {
+            // Failure Handlerが呼ばれた場合も明確にログ出力
+            setMessage(`検索エラーが発生しました: ${error.message}`);
+            addLog(`サーバー呼び出し失敗: ${error.message}`);
+            console.error("サーバー呼び出しエラー:", error);
+            // エラー時も「見つかりませんでした」表示を出す
+            document.getElementById('rental-records').style.display = 'block';
+            document.getElementById('records-container').innerHTML = '<p class="no-records">検索中にエラーが発生しました。</p>';
           })
           .findRentalRecords(bookId);
       }
 
       // 貸出記録を表示する関数
       function displayRentalRecords(records) {
+        console.log("表示する貸出記録:", records); // デバッグ用
+        addLog(`表示する貸出記録: ${JSON.stringify(records)}`); // デバッグ用
+        
         const container = document.getElementById('records-container');
         
         // テーブルを作成
@@ -220,17 +301,34 @@
         
         // レコードごとに行を追加
         records.forEach(record => {
-          // 日付をフォーマット
-          const lendingDate = record.lendingDate ? new Date(record.lendingDate).toLocaleString() : 'N/A';
-          const dueDate = record.dueDate ? new Date(record.dueDate).toLocaleString() : 'N/A';
+          console.log("レコード詳細:", record); // デバッグ用
+          
+          // 日付文字列をフォーマット (ISO文字列からDateオブジェクトを生成)
+          let lendingDateStr = 'N/A';
+          if (record.lendingDate && typeof record.lendingDate === 'string' && record.lendingDate !== '（ログから復元）') {
+            try {
+              lendingDateStr = new Date(record.lendingDate).toLocaleString();
+            } catch (e) { console.error("貸出日時のパースエラー:", e); }
+          } else if (record.lendingDate === '（ログから復元）') {
+            lendingDateStr = record.lendingDate;
+          }
+          
+          let dueDateStr = 'N/A';
+           if (record.dueDate && typeof record.dueDate === 'string' && record.dueDate !== '（ログから復元）') {
+            try {
+              dueDateStr = new Date(record.dueDate).toLocaleDateString(); // 日付のみ表示
+            } catch (e) { console.error("返却予定日のパースエラー:", e); }
+          } else if (record.dueDate === '（ログから復元）') {
+            dueDateStr = record.dueDate;
+          }
           
           html += `
             <tr>
               <td>${record.bookId || 'N/A'}</td>
               <td>${record.bookTitle || 'N/A'}</td>
               <td>${record.userName || 'N/A'}</td>
-              <td>${lendingDate}</td>
-              <td>${dueDate}</td>
+              <td>${lendingDateStr}</td>
+              <td>${dueDateStr}</td>
               <td>${record.status || 'N/A'}</td>
             </tr>
           `;
@@ -248,11 +346,6 @@
       function setMessage(msg) {
         document.getElementById('message').innerText = msg;
       }
-
-      // 初期状態ではスキャナービューポートを非表示にする
-      document.getElementById('interactive').style.display = 'none';
-      // 初期状態ではデバッグログを非表示にする
-      document.getElementById('debug-log').style.display = 'none';
 
       // 書籍IDが手入力された場合にEnterキーで検索を実行
       document.getElementById('book-id').addEventListener('keypress', (event) => {
