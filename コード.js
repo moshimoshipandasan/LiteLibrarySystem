@@ -232,10 +232,12 @@ function getLendingInfo(bookId) { // Changed parameter name
       
       // 大文字小文字を区別せずに比較し、状態が「未返却」かどうかを厳密に確認
       if (rowBookId && isIdMatch && isStatusMatch) {
+        const lendingDate = row[lendingDateColIndex];
         const lendingInfo = {
-          bookTitle: row[titleColIndex],
-          userName: row[userNameColIndex],
-          lendingDate: row[lendingDateColIndex] // Dateオブジェクトのまま返す
+          bookTitle: row[titleColIndex] || "",
+          userName: row[userNameColIndex] || "",
+          // Dateオブジェクトが存在し、有効な日付であればISO文字列に変換
+          lendingDate: (lendingDate instanceof Date && !isNaN(lendingDate)) ? lendingDate.toISOString() : null
         };
         const foundMsg = `未返却の貸出情報発見 (行 ${i + 1}): ${lendingInfo.bookTitle}, ${lendingInfo.userName}`;
         logs.push(foundMsg);
