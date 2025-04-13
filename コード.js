@@ -18,6 +18,10 @@ function doGet(e) {
         page = 'rental_books_finder';
         title = '貸出書籍検索システム';
         break;
+      case 'user_returns':
+        page = 'user_returns';
+        title = '利用者別返却システム';
+        break;
       default:
         // デフォルトは貸出ページのまま
         break;
@@ -967,6 +971,110 @@ function processBulkLending(bulkData) {
   }
 }
 
+
+/**
+ * 利用者IDに基づいて貸出記録を検索する関数
+ * @param {string} userId - 利用者ID
+ * @return {object} 貸出記録とログ情報を含むオブジェクト
+ */
+function getUserRentals(userId) {
+  // ログを収集するための配列
+  const logs = [];
+  
+  if (!userId) {
+    logs.push("利用者IDが指定されていません。");
+    return { records: [], logs: logs };
+  }
+  
+  logs.push(`利用者の貸出記録検索開始: 利用者ID=${userId}`);
+  console.log(`利用者の貸出記録検索開始: 利用者ID=${userId}`);
+  Logger.log(`デバッグ\t利用者の貸出記録検索開始: 利用者ID=${userId}`);
+  
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lendingSheet = ss.getSheetByName("貸出記録");
+    if (!lendingSheet) {
+      const errorMsg = "シート「貸出記録」が見つかりません。";
+      logs.push(errorMsg);
+      console.error(errorMsg);
+      throw new Error("貸出記録シートが見つかりません。");
+    }
+
+    const data = lendingSheet.getDataRange().getValues();
+    // ヘッダー: A:書籍ID, B:書籍名, C:利用者ID, D:利用者名, E:貸出日時, F:返却予定日, G:返却状況, H:返却日時
+    const bookIdColIndex = 0;     // A列
+    const titleColIndex = 1;      // B列
+    const userIdColIndex = 2;     // C列
+    const userNameColIndex = 3;   // D列
+    const lendingDateColIndex = 4;// E列
+    const dueDateColIndex = 5;    // F列
+    const statusColIndex = 6;     // G列
+
+    logs.push(`検索開始: 貸出記録シートの行数=${data.length}`);
+    
+    // 検索結果を格納する配列
+    const records = [];
+    
+    // ヘッダー行を除く (1行目から検索)
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const rowUserId = row[userIdColIndex] ? row[userIdColIndex].toString().trim() : "";
+      
+      // デバッグ用にログ出力
+      logs.push(`行 ${i + 1} 検証中: シートの利用者ID=[${rowUserId}], 検索対象の利用者ID=[${userId.trim()}]`);
+      Logger.log(`デバッグ\t行 ${i + 1} 検証中: シートの利用者ID=[${rowUserId}], 検索対象の利用者ID=[${userId.trim()}]`);
+      
+      // 利用者IDが一致する行を探す
+      // 詳細なデバッグ情報を追加
+      const rowUserIdLower = rowUserId.toLowerCase();
+      const userIdLower = userId.trim().toLowerCase();
+      const isIdMatch = rowUserIdLower === userIdLower;
+      Logger.log(`デバッグ\t行 ${i + 1} 詳細比較: ID一致=${isIdMatch}(${rowUserIdLower}=${userIdLower})`);
+      
+      // 大文字小文字を区別せずに比較
+      if (rowUserId && isIdMatch) {
+        // 貸出記録情報を作成 (DateオブジェクトをISO文字列に変換)
+        const lendingDate = row[lendingDateColIndex];
+        const dueDate = row[dueDateColIndex];
+        
+        const record = {
+          bookId: row[bookIdColIndex] || "",
+          bookTitle: row[titleColIndex] || "",
+          userId: rowUserId,
+          userName: row[userNameColIndex] || "",
+          // Dateオブジェクトが存在し、有効な日付であればISO文字列に変換
+          lendingDate: (lendingDate instanceof Date && !isNaN(lendingDate)) ? lendingDate.toISOString() : null,
+          dueDate: (dueDate instanceof Date && !isNaN(dueDate)) ? dueDate.toISOString() : null,
+          status: row[statusColIndex] || ""
+        };
+        
+        records.push(record);
+        logs.push(`貸出記録発見 (行 ${i + 1}): ${record.bookTitle}, ${record.userName}, 状態=${record.status}`);
+        Logger.log(`デバッグ\t貸出記録発見 (行 ${i + 1}): ${record.bookTitle}, ${record.userName}, 状態=${record.status}`);
+        
+        // デバッグ: 追加したレコードの詳細をログに出力
+        Logger.log(`デバッグ\t追加したレコード詳細: ${JSON.stringify(record)}`);
+      }
+    }
+
+    if (records.length > 0) {
+      logs.push(`利用者ID ${userId} の貸出記録が ${records.length} 件見つかりました。`);
+      Logger.log(`デバッグ\t検索結果: ${records.length}件の記録が見つかりました。records配列=${JSON.stringify(records)}`);
+    } else {
+      logs.push(`利用者ID ${userId} の貸出記録が見つかりませんでした。`);
+      Logger.log(`デバッグ\t検索結果: 記録が見つかりませんでした。records配列は空です。`);
+    }
+    
+    return { records: records, logs: logs };
+    
+  } catch (error) {
+    const errorMsg = `貸出記録の検索中にエラーが発生しました: ${error} (スタック: ${error.stack})`;
+    logs.push(errorMsg);
+    console.error(errorMsg);
+    console.error(error);
+    throw new Error(`貸出記録の検索に失敗しました: ${error.message}`);
+  }
+}
 
 // processReturnForm と getLendingInfo のテスト関数も同様に bookId ベースで作成可能
 // sendOverdueReminders のテストは、実際にメールが飛ぶため注意が必要
