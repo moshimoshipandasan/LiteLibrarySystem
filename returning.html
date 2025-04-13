@@ -5,48 +5,61 @@
     <title>図書返却システム</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap'); /* Google Font Import */
+
       /* --- General Styles --- */
       body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f4f4f4;
+        font-family: 'Noto Sans JP', sans-serif; /* Google Font適用 */
+        background-color: #f4f4f4; /* 背景色は維持 */
         color: #333;
         margin: 0;
-        padding: 20px;
-        line-height: 1.6;
+        padding: 0; /* bodyのpadding削除 */
+        line-height: 1.7; /* 行間を少し広げる */
+        font-size: 1.2rem; /* ベースフォントサイズをさらに大きく */
       }
       .container {
-        max-width: 700px; /* 少し広げる */
-        margin: 20px auto;
-        padding: 30px;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        /* max-width: 700px; */ /* 最大幅削除 */
+        /* margin: 20px auto; */ /* 中央寄せマージン削除 */
+        margin: 0;
+        /* padding: 30px; */ /* padding削除 */
+        padding: 15px; /* 左右に少しだけパディングを残す */
+        background-color: #fff; /* 背景色は維持 */
+        /* border-radius: 8px; */ /* 角丸削除 */
+        /* box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); */ /* 影削除 */
+        width: 100%;
+        min-height: 100vh; /* 画面の高さいっぱいに広げる */
+        box-sizing: border-box; /* paddingを含めて幅100% */
       }
       h1 {
         color: #0056b3; /* 図書館らしい青 */
+        /* text-align: center; */ /* 中央揃え解除、必要なら個別要素で */
+        margin-top: 0; /* 上マージン調整 */
         text-align: center;
         margin-bottom: 30px;
         border-bottom: 2px solid #eee;
-        padding-bottom: 10px;
+        padding-bottom: 20px; /* 下線とのスペース調整 */
+        font-size: 2em; /* 見出しをさらに大きく */
       }
 
       /* --- Form Styles --- */
       .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 30px; /* グループ間のスペースをさらに広げる */
       }
       label {
         display: block;
-        margin-bottom: 8px;
-        font-weight: bold;
-        color: #555;
+        margin-bottom: 12px; /* ラベル下のスペースを広げる */
+        font-weight: 700; /* 太字 */
+        color: #444; /* 少し濃く */
+        font-size: 1.2em; /* ラベルをさらに大きく */
       }
       input[type="text"], input[type="number"] { /* numberも追加 */
         width: 100%;
-        padding: 12px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
+        padding: 18px; /* 入力欄のパディングをさらに大きく */
+        border: 1px solid #aaa; /* 境界線を少し濃く */
+        border-radius: 6px; /* 少し角丸を強く */
         box-sizing: border-box;
-        font-size: 1rem;
+        font-size: 1.2em; /* 入力文字をさらに大きく */
+        font-family: 'Noto Sans JP', sans-serif; /* フォント継承 */
       }
       input[readonly] {
         background-color: #e9ecef;
@@ -55,37 +68,47 @@
       button {
         background-color: #0056b3;
         color: white;
-        padding: 12px 20px;
+        padding: 18px 30px; /* ボタンのパディングをさらに大きく */
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        font-size: 1rem;
+        font-size: 1.2em; /* ボタン文字をさらに大きく */
+        font-weight: 700; /* ボタン文字を太く */
         transition: background-color 0.3s ease;
-        margin-top: 5px; /* ボタン間のスペース */
+        margin-top: 10px; /* ボタン間のスペース調整 */
+        font-family: 'Noto Sans JP', sans-serif; /* フォント継承 */
       }
       button:hover {
         background-color: #004494;
       }
       /* スキャンボタンは少し小さく */
       #scan-book-id-button { /* ID修正 */
-         padding: 10px 15px;
+         padding: 15px 20px; /* スキャンボタンのパディング調整 */
          background-color: #6c757d; /* グレー系 */
          margin-right: 10px;
+         font-size: 1.1em; /* スキャンボタンも少し大きく */
+         font-weight: 400; /* 通常の太さ */
       }
        #scan-book-id-button:hover { /* ID修正 */
          background-color: #5a6268;
       }
       /* 検索ボタン */
       button[onclick="fetchLendingInfo()"] {
-          margin-top: 10px; /* 上に少しスペース */
+          margin-top: 15px; /* 上に少しスペース */
+          /* 他のボタンとスタイルを合わせる */
+          font-weight: 400;
+          padding: 15px 25px; /* パディング調整 */
+          font-size: 1.1em; /* 少し小さめでも良い */
       }
       /* 返却ボタン */
       #return-button {
           display: inline-block; /* 初期はJSで非表示 */
           width: auto; /* 幅自動 */
-          margin-top: 15px;
+          margin-top: 25px; /* 上マージン調整 */
           background-color: #dc3545; /* 警告の色 */
-          padding: 10px 15px; /* 少し小さめ */
+          padding: 15px 25px; /* パディング調整 */
+          font-size: 1.2em; /* 他の主要ボタンと合わせる */
+          font-weight: 700;
       }
       #return-button:hover {
           background-color: #c82333;
@@ -121,28 +144,31 @@
 
       /* --- Book Details Area --- */
       #book-details {
-        margin-top: 25px;
-        padding: 20px;
+        margin-top: 35px; /* 上マージン調整 */
+        padding: 30px; /* パディング調整 */
         border: 1px solid #d6e9c6; /* 成功/情報系の色 */
-        background-color: #dff0d8; /* 成功/情報系の色 */
-        border-radius: 4px;
+        background-color: #f0f9eb; /* 少し薄い背景色 */
+        border-radius: 6px;
         color: #3c763d;
+        font-size: 1.2em; /* 詳細文字をさらに大きく */
       }
        #book-details p {
-           margin: 5px 0;
+           margin: 10px 0; /* 段落間のスペース調整 */
        }
        #book-details strong {
            color: #31708f;
+           margin-right: 10px; /* ラベルと値の間にスペース */
        }
 
 
       /* --- Message Area --- */
       #message {
-        margin-top: 20px;
-        font-weight: bold;
-        padding: 10px;
-        border-radius: 4px;
+        margin-top: 30px; /* 上マージン調整 */
+        font-weight: 700; /* 太字 */
+        padding: 18px; /* パディング調整 */
+        border-radius: 6px;
         text-align: center;
+        font-size: 1.2em; /* メッセージ文字をさらに大きく */
       }
       /* メッセージの種類に応じてスタイルを変える（例） */
       #message:not(:empty) { /* メッセージがある時だけ表示 */
@@ -167,11 +193,30 @@
 
       /* --- Responsive Design --- */
       @media (max-width: 600px) {
-        .container {
-          padding: 20px;
+        /* body, .container の padding, margin, max-width, border-radius, box-shadow はベーススタイルで対応済み */
+         .container {
+             padding: 10px; /* スマホではコンテナ内パディングを少し減らす */
         }
         h1 {
           font-size: 1.8rem;
+           /* スマホ表示用にh1にも少しパディング */
+          padding-left: 10px;
+          padding-right: 10px;
+        }
+         /* .form-group にも左右パディングを追加 */
+        .form-group {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        /* 書籍詳細エリアにもパディング */
+        #book-details {
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        /* メッセージエリアにもパディング */
+        #message {
+            margin-left: 10px;
+            margin-right: 10px;
         }
         button {
           width: 100%; /* 小画面ではボタン幅を100%に */
