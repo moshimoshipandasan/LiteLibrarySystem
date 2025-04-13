@@ -296,17 +296,34 @@
             type : "LiveStream",
             target: document.getElementById(targetElementId),
             constraints: {
-              width: 480,
+              width: 640,  // 正方形に設定
+              height: 640,  // 正方形に設定
               facingMode: "environment"
             },
-            area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
+            area: { top: "10%", right: "5%", left: "5%", bottom: "10%" } // スキャンエリアを広げる
           },
-          locator: { patchSize: "medium", halfSample: true },
+          locator: { 
+            patchSize: "large",  // パッチサイズを大きくして精度向上
+            halfSample: false    // 半分サンプリングを無効化して精度向上
+          },
           numOfWorkers: navigator.hardwareConcurrency || 4,
-          decoder : { readers : [ // 利用者IDで使いそうなバーコード形式を指定
+          frequency: 2,          // スキャン頻度を少し上げて精度向上
+          decoder : { 
+            readers : [          // 複数のバーコードリーダーを有効化
               'code_128_reader',
-              'code_39_reader'
-            ] },
+              'code_39_reader',
+              'ean_reader',
+              'ean_8_reader',
+              'code_93_reader'
+            ],
+            debug: {
+              drawBoundingBox: true,
+              showFrequency: true,
+              drawScanline: true,
+              showPattern: true
+            },
+            multiple: false      // 複数のバーコードを同時に読み取らない
+          },
           locate: true
         }, function(err) {
             if (err) {
@@ -321,11 +338,57 @@
             Quagga.start();
         });
 
-        Quagga.onProcessed(function(result) { /* 描画処理は省略 */ });
+        Quagga.onProcessed(function(result) {
+          // 描画処理を追加
+          var drawingCtx = Quagga.canvas.ctx.overlay,
+              drawingCanvas = Quagga.canvas.dom.overlay;
+          
+          if (result) {
+            if (result.boxes) {
+              drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+              result.boxes.filter(function (box) {
+                return box !== result.box;
+              }).forEach(function (box) {
+                Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+              });
+            }
+            
+            if (result.box) {
+              Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+            }
+            
+            if (result.codeResult && result.codeResult.code) {
+              Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+            }
+          }
+        });
 
+        // 重複防止のためのタイムスタンプと前回のコード
+        let lastDetectedTime = 0;
+        let lastDetectedCode = null;
+        const COOLDOWN_PERIOD = 3000; // 同じコードを再検出するまでの待機時間（ミリ秒）
+        
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
-          console.log("バーコード検出:", code);
+          const currentTime = new Date().getTime();
+          console.log("バーコード検出:", code, "信頼度:", result.codeResult.confidence);
+          
+          // 信頼度が低い場合はスキップ（閾値を下げて検出率向上）
+          if (result.codeResult.confidence < 0.5) {
+            console.log("信頼度が低いため無視します:", result.codeResult.confidence);
+            return;
+          }
+          
+          // 前回と同じコードで、クールダウン期間内の場合はスキップ
+          if (code === lastDetectedCode && (currentTime - lastDetectedTime) < COOLDOWN_PERIOD) {
+            console.log(`同じコードが短時間で検出されました。無視します。経過時間: ${currentTime - lastDetectedTime}ms`);
+            return;
+          }
+          
+          // 新しいコードとして処理
+          lastDetectedCode = code;
+          lastDetectedTime = currentTime;
+          
           document.getElementById(inputFieldId).value = code;
           setMessage(`コード「${code}」を読み取りました。`);
           
