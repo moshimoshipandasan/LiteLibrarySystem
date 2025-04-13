@@ -181,6 +181,8 @@
       let isScanning = false;
       let scannedBookIds = []; // 返却する書籍IDを保持する配列
       let currentScannerTarget = null; // スキャナー用
+      // ビープ音用のAudioオブジェクト
+      const beepSound = new Audio("data:audio/wav;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAGDgYtAgAyN+QWaAAihwMWm4G8QQRDiMcCBcH3Cc+CDv/7xA4Tvh9Rz/y8QADBwMWgQAZG/ILNAARQ4GLTcDeIIIhxGOBAuD7hOfBB3/94gcJ3w+o5/5eIAIAAAVwWgQAVQ2ORaIQwEMAJiDg95G4nQL7mQVWI6GwRcfsZAcsKkJvxgxEjzFUgfHoSQ9Qq7KNwqHwuB13MA4a1q/DmBrHgPcmjiGoh//EwC5nGPEmS4RcfkVKOhJf+WOgoxJclFz3kgn//dBA+ya1GhurNn8zb//9NNutNuhz31f////9vt///z+IdAEAAAK4LQIAKobHItEIYCGAExBwe8jcToF9zIKrEdDYIuP2MgOWFSE34wYiR5iqQPj0JIeoVdlG4VD4XA67mAcNa1fhzA1jwHuTRxDUQ//iYBczjHiTJcIuPyKlHQkv/LHQUYkuSi57yQT//uggfZNajQ3Vmz+Zt//+mm3Wm3Q576v////+32///5/EOgAAADVghQAAAAA//uQZAUAB1WI0PZugAAAAAoQwAAAEk3nRd2qAAAAACiDgAAAAAAABCqEEQRLCgwpBGMlJkIz8jKhGvj4k6jzRnqasNKIeoh5gI7BJaC1A1AoNBjJgbyApVS4IDlZgDU5WUAxEKDNmmALHzZp0Fkz1FMTmGFl1FMEyodIavcCAUHDWrKAIA4aa2oCgILEBupZgHvAhEBcZ6joQBxS76AgccrFlczBvKLC0QI2cBoCFvfTDAo7eoOQInqDPBtvrDEZBNYN5xwNwxQRfw8ZQ5wQVLvO8OYU+mHvFLlDh05Mdg7BT6YrRPpCBznMB2r//xKJjyyOh+cImr2/4doscwD6neZjuZR4AgAABYAAAABy1xcdQtxYBYYZdifkUDgzzXaXn98Z0oi9ILU5mBjFANmRwlVJ3/6jYDAmxaiDG3/6xjQQCCKkRb/6kg/wW+kSJ5//rLobkLSiKmqP/0ikJuDaSaSf/6JiLYLEYnW/+kXg1WRVJL/9EmQ1YZIsv/6Qzwy5qk7/+tEU0nkls3/zIUMPKNX/6yZLf+kFgAfgGyLFAUwY//uQZAUABcd5UiNPVXAAAApAAAAAE0VZQKw9ISAAACgAAAAAVQIygIElVrFkBS+Jhi+EAuu+lKAkYUEIsmEAEoMeDmCETMvfSHTGkF5RWH7kz/ESHWPAq/kcCRhqBtMdokPdM7vil7RG98A2sc7zO6ZvTdM7pmOUAZTnJW+NXxqmd41dqJ6mLTXxrPpnV8DouEimPVuiRkITnEBKDATKJd9ZG/LZZPuQELRJXYmKl7Ds2nJBcXHbNsOg5PRk9J8UxLWGs5FhiGBUAg1xHYDaHR0cDovL3d3dy5yZXNvdXJjZXNwYWNrLmNvbS9ycGcvR2VuZXJhdG9yLw==");
 
       // --- 初期化処理 ---
       window.onload = function() {
@@ -249,6 +251,10 @@
 
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
+          
+          // ビープ音を再生
+          playBeepSound();
+          
           addBookIdToList(code); // スキャンしたIDをリストに追加
           setMessage(`書籍ID [${code}] を追加しました。`);
           // 連続スキャンのため停止しない
@@ -348,6 +354,20 @@
       }
 
       // --- ユーティリティ関数 ---
+      // ビープ音を再生する関数
+      function playBeepSound() {
+        try {
+          // 音量設定
+          beepSound.volume = 0.5;
+          // 再生位置を先頭に戻す（連続で鳴らせるように）
+          beepSound.currentTime = 0;
+          // 音を再生
+          beepSound.play().catch(e => console.error("ビープ音の再生に失敗:", e));
+        } catch (e) {
+          console.error("ビープ音の再生中にエラーが発生:", e);
+        }
+      }
+      
       function setMessage(msg) {
         document.getElementById('message').innerText = msg;
       }
