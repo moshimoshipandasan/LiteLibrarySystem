@@ -201,23 +201,12 @@
     <div class="container">
       <h1>図書貸出</h1>
 
-      <div class="form-group">
-        <label for="book-id">書籍ID</label>
-        <button id="scan-book-id-button">書籍IDをスキャン</button>
-        <input type="text" id="book-id" name="bookId" placeholder="スキャンするか手入力してください">
-        <div id="interactive" class="viewport"></div>
-      </div>
-
-      <div class="form-group">
-        <label for="book-title">書籍名</label>
-        <input type="text" id="book-title" name="bookTitle" readonly>
-      </div>
-
-      <div class="form-group">
+       <!-- 利用者情報が先 -->
+       <div class="form-group">
         <label for="user-id">利用者ID</label>
          <button id="scan-user-button">利用者IDをスキャン</button>
          <input type="text" id="user-id" name="userId" placeholder="スキャンするか手入力してください">
-         <div id="interactive-user" class="viewport"></div>
+         <div id="interactive-user" class="viewport" style="display: none;"></div> <!-- 初期非表示 -->
       </div>
 
        <div class="form-group">
@@ -225,7 +214,27 @@
         <input type="text" id="user-name" name="userName" readonly>
       </div>
 
-      <button onclick="submitForm()">貸出登録</button>
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+
+      <!-- 書籍情報は利用者ID確定後に有効化 -->
+      <fieldset id="book-section" disabled>
+          <div class="form-group">
+            <label for="book-id">書籍ID（連続スキャン可能）</label>
+            <button id="scan-book-id-button">書籍IDをスキャン</button>
+            <input type="text" id="book-id" name="bookId" placeholder="利用者ID確定後にスキャンしてください" readonly> <!-- 初期はReadOnly -->
+            <div id="interactive" class="viewport" style="display: none;"></div> <!-- 初期非表示 -->
+          </div>
+
+          <div class="form-group">
+            <label for="book-titles">貸出書籍リスト</label>
+            <!-- 書籍名をリスト表示するエリア -->
+            <div id="book-titles-list" style="min-height: 50px; background-color: #e9ecef; border: 1px solid #aaa; border-radius: 6px; padding: 10px;">
+              <!-- ここに書籍名が追加される -->
+            </div>
+          </div>
+      </fieldset>
+
+      <button id="lending-button" onclick="submitForm()" disabled>貸出登録</button> <!-- 初期は無効 -->
       <p id="message"></p>
 
     </div>
@@ -233,21 +242,58 @@
     <!-- バーコード読み取りライブラリ (QuaggaJSを使用) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script>
-      let bookIdScanning = false; // Renamed from isbnScanning
+      let bookIdScanning = false;
       let userScanning = false;
-      let currentScannerTarget = null; // 現在アクティブなスキャナーのターゲットID
+      let currentScannerTarget = null;
+      let scannedBookIds = []; // スキャンした書籍IDを保持する配列
+      let scannedBookTitles = []; // スキャンした書籍名を保持する配列
+      let currentUserId = null; // 確定した利用者ID
+      let currentUserName = null; // 確定した利用者名
 
-      // 書籍IDスキャンボタンの処理
-      document.getElementById('scan-book-id-button').addEventListener('click', () => {
-        toggleScanner('interactive', 'book-id'); // Use 'book-id'
-      });
+      // --- 初期化処理 ---
+      window.onload = function() {
+        // スキャナービューポートを非表示
+        document.getElementById('interactive').style.display = 'none';
+        document.getElementById('interactive-user').style.display = 'none';
+        // イベントリスナー設定
+        setupEventListeners();
+        updateLendingButtonState(); // 初期状態のボタン制御
+      };
 
-      // 利用者IDスキャンボタンの処理
-      document.getElementById('scan-user-button').addEventListener('click', () => {
-         toggleScanner('interactive-user', 'user-id');
-      });
+      function setupEventListeners() {
+        // 書籍IDスキャンボタン
+        document.getElementById('scan-book-id-button').addEventListener('click', () => {
+          // ★利用者IDチェックを削除。fieldsetのdisabled属性で制御する★
+          toggleScanner('interactive', 'book-id');
+        });
+         // 書籍ID Enterキー
+         document.getElementById('book-id').addEventListener('keypress', (event) => {
+          // fieldsetが有効な場合のみ処理
+          if (!document.getElementById('book-section').disabled && event.key === 'Enter' && !bookIdScanning) {
+             const bookId = document.getElementById('book-id').value.trim();
+             if (bookId) {
+                 addBookToList(bookId); // 手入力されたIDを追加
+             }
+          }
+        });
 
-      // スキャナーの表示/非表示を切り替える関数
+        // 利用者IDスキャンボタン
+        document.getElementById('scan-user-button').addEventListener('click', () => {
+           toggleScanner('interactive-user', 'user-id');
+        });
+        // 利用者ID手入力変更時
+        document.getElementById('user-id').addEventListener('change', (event) => {
+            if (!userScanning) fetchUserInfo(event.target.value.trim());
+        });
+         // 利用者ID Enterキー
+        document.getElementById('user-id').addEventListener('keypress', (event) => {
+          if (event.key === 'Enter' && !userScanning) {
+            fetchUserInfo(event.target.value.trim());
+          }
+        });
+      }
+
+      // --- スキャナー関連関数 ---
       function toggleScanner(targetElementId, inputFieldId) {
         const targetViewport = document.getElementById(targetElementId);
         const otherViewportId = targetElementId === 'interactive' ? 'interactive-user' : 'interactive';
@@ -266,14 +312,14 @@
           otherViewport.style.display = 'none'; // 他のビューポートを隠す
           startScanner(targetElementId, inputFieldId);
           currentScannerTarget = targetElementId;
-          if (targetElementId === 'interactive') bookIdScanning = true; // Renamed
+          if (targetElementId === 'interactive') bookIdScanning = true;
           else userScanning = true;
         } else {
           // スキャナーを停止
           stopScanner(targetElementId);
           targetViewport.style.display = 'none';
           currentScannerTarget = null;
-           if (targetElementId === 'interactive') bookIdScanning = false; // Renamed
+           if (targetElementId === 'interactive') bookIdScanning = false;
            else userScanning = false;
         }
       }
@@ -293,50 +339,22 @@
             name : "Live",
             type : "LiveStream",
             target: document.getElementById(targetElementId),
-            constraints: {
-              width: 480,
-              // height: 320, // 高さは自動調整に任せる方が良い場合がある
-              facingMode: "environment" // 背面カメラを使用
-            },
-            area: { // スキャン領域を中央に限定（オプション）
-              top: "20%",
-              right: "10%",
-              left: "10%",
-              bottom: "20%"
-            }
+            constraints: { width: 480, facingMode: "environment" },
+            area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
           },
-          locator: {
-             patchSize: "medium", // バーコード検出の精度設定
-             halfSample: true
-          },
-          numOfWorkers: navigator.hardwareConcurrency || 4, // 利用可能なCPUコア数を使う
+          locator: { patchSize: "medium", halfSample: true },
+          numOfWorkers: navigator.hardwareConcurrency || 4,
           decoder : {
-             readers : [ // 書籍IDで使いそうなバーコード形式を指定
-               'code_128_reader',
-               'code_39_reader',
-               // 必要に応じて他の形式も追加 (EANはISBN用なので削除またはコメントアウト)
-               // 'ean_reader',
-               // 'ean_8_reader',
-               // 'upc_reader',
-               // 'upc_e_reader',
-               // 'codabar_reader'
-             ],
-             debug: { // デバッグ情報を表示（開発中に便利）
-                drawBoundingBox: true,
-                showFrequency: false,
-                drawScanline: true,
-                showPattern: false
-            }
+             readers : [ 'code_128_reader', 'code_39_reader' ],
+             debug: { drawBoundingBox: true, showFrequency: false, drawScanline: true, showPattern: false }
           },
-          locate: true // trueにするとバーコードの位置を特定しようとする
+          locate: true
         }, function(err) {
             if (err) {
                 console.error("Quagga.init Error:", err);
                 setMessage(`スキャナーの初期化に失敗: ${err.name} - ${err.message}. カメラへのアクセスを許可してください。`);
-                // エラー発生時はビューポートを隠す
                 document.getElementById(targetElementId).style.display = 'none';
                 currentScannerTarget = null;
-                // エラー発生時の状態変数のリセットが漏れていた可能性を修正
                 if (targetElementId === 'interactive') bookIdScanning = false;
                 else userScanning = false;
                 return;
@@ -345,70 +363,52 @@
             setMessage("バーコードをカメラに向けてください。");
             Quagga.start();
 
-            // 検出中の描画処理 (initコールバック内に移動)
             Quagga.onProcessed(function(result) {
               var drawingCtx = Quagga.canvas.ctx.overlay,
                 drawingCanvas = Quagga.canvas.dom.overlay;
-
               if (result) {
-                  // 検出領域のボックス描画
                   if (result.boxes) {
                       drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-                      result.boxes.filter(function (box) {
-                          return box !== result.box;
-                      }).forEach(function (box) {
+                      result.boxes.filter(function (box) { return box !== result.box; }).forEach(function (box) {
                           Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
                       });
                   }
-                  // 確定したバーコードのボックス描画
-                  if (result.box) {
-                      Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
-                  }
-                  // 読み取り中のコードと線の描画
-                  if (result.codeResult && result.codeResult.code) {
-                     // Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
-                  }
+                  if (result.box) { Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2}); }
+                  // if (result.codeResult && result.codeResult.code) { Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3}); }
               }
-            }); // <<< Semicolon added
+            });
 
-            // バーコード検出成功時の処理 (initコールバック内に移動)
             Quagga.onDetected(function(result) {
               const code = result.codeResult.code;
-              // ★★★ このリスナーが呼ばれた時の inputFieldId を使う ★★★
-              const currentInputFieldId = inputFieldId; // 呼び出し時のinputFieldIdを保持
+              const currentInputFieldId = inputFieldId;
               console.log("バーコード検出:", code, " Target Element:", targetElementId, "Target Input:", currentInputFieldId);
 
-              // 正しい入力フィールドにのみ値を設定
-              document.getElementById(currentInputFieldId).value = code;
-              setMessage(`コード「${code}」を読み取りました。`);
-
               // スキャン成功したらスキャナーを停止し、ビューポートを隠す
-              stopScanner(targetElementId); // 現在のスキャナーを停止
+              stopScanner(targetElementId);
               document.getElementById(targetElementId).style.display = 'none';
-              currentScannerTarget = null; // アクティブなスキャナーをクリア
+              currentScannerTarget = null;
 
               // どのフィールドが更新されたかに応じて後続処理を呼び出す
               if (currentInputFieldId === 'book-id') {
                  bookIdScanning = false;
-                 fetchBookDetails(code);
+                 addBookToList(code); // スキャンした書籍IDをリストに追加
               } else if (currentInputFieldId === 'user-id') {
                  userScanning = false;
-                 fetchUserInfo(code);
+                 document.getElementById(currentInputFieldId).value = code; // 利用者IDは入力欄に直接設定
+                 setMessage(`利用者ID「${code}」を読み取りました。`);
+                 fetchUserInfo(code); // 利用者情報を取得
               }
-            }); // <<< Semicolon added
-        }); // <<< Correct closing }); for Quagga.init callback
+            });
+        });
       }
 
       // スキャナーを停止する関数
       function stopScanner(targetElementId) {
-        // Quagga.stop() を呼ぶ前にリスナーを明示的に解除する方がより確実
-        if (typeof Quagga !== 'undefined' && Quagga.initialized) { // Check if initialized before stopping
+        if (typeof Quagga !== 'undefined' && Quagga.initialized) {
             Quagga.offDetected(null);
             Quagga.offProcessed(null);
             Quagga.stop();
             console.log("Quagga スキャナー停止 & リスナー解除");
-
-            // ビューポート内のCanvasとVideoをクリア
             const viewport = document.getElementById(targetElementId);
             if (viewport) {
               const canvas = viewport.querySelector('canvas');
@@ -419,126 +419,186 @@
         } else {
              console.log("Quagga not initialized or already stopped.");
         }
-        // ビューポートを隠す処理は toggleScanner で行うのでここでは不要かも
-        // if (document.getElementById(targetElementId)) {
-        //    document.getElementById(targetElementId).style.display = 'none';
-        // }
         console.log("スキャナー停止処理完了:", targetElementId);
       }
 
-      // 書籍情報を取得する関数 (GAS側を呼び出す) - Renamed from fetchBookInfo
-      function fetchBookDetails(bookId) {
-        if (!bookId) {
-            setMessage("書籍IDが入力されていません。");
-            return;
-        }
-        setMessage("書籍情報を検索中...");
-        document.getElementById('book-title').value = ''; // 検索中はクリア
-        google.script.run
-          .withSuccessHandler(bookDetails => { // Changed variable name
-            if (bookDetails && bookDetails.title) {
-              document.getElementById('book-title').value = bookDetails.title;
-              setMessage("書籍情報を取得しました。");
-            } else {
-               setMessage("書籍情報が見つかりませんでした。書籍IDを確認してください。"); // Updated message
-            }
-          })
-          .withFailureHandler(error => {
-            setMessage(`書籍情報の取得エラー: ${error.message}`);
-            console.error("書籍情報取得エラー:", error);
-          })
-          .getBookDetails(bookId); // Changed function name
-      }
+      // --- データ取得・処理関数 ---
 
-       // 利用者情報を取得する関数 (GAS側を呼び出す)
+       // 利用者情報を取得・確定する関数
       function fetchUserInfo(userId) {
-        if (!userId) {
-            setMessage("利用者IDが入力されていません。");
+        // 入力値チェック
+        const userIdInput = document.getElementById('user-id');
+        const userIdValue = userId || userIdInput.value.trim(); // 引数があればそれを使う
+        if (!userIdValue) {
+            setMessage("利用者IDを入力またはスキャンしてください。");
+            resetLendingState(false); // 利用者情報のみリセット
             return;
         }
+
         setMessage("利用者情報を検索中...");
         document.getElementById('user-name').value = ''; // 検索中はクリア
+        currentUserId = null; // 検索中は一旦クリア
+        currentUserName = null;
+        disableBookSection(true); // 検索中は書籍セクション無効
+        updateLendingButtonState(); // ボタン無効化
+
          google.script.run
           .withSuccessHandler(userInfo => {
             if (userInfo && userInfo.name) {
-              document.getElementById('user-name').value = userInfo.name;
-              setMessage("利用者情報を取得しました。");
+              // 利用者情報が見つかった場合
+              currentUserId = userIdValue; // 利用者IDを確定
+              currentUserName = userInfo.name;
+              document.getElementById('user-id').value = currentUserId; // 入力欄にも反映
+              document.getElementById('user-name').value = currentUserName;
+              setMessage(`利用者: ${currentUserName} さんを確認しました。書籍をスキャンしてください。`);
+              disableBookSection(false); // 書籍セクションを有効化
+              document.getElementById('book-id').readOnly = false; // 書籍ID入力欄を有効化
+              document.getElementById('book-id').placeholder = "連続スキャンまたは手入力してEnter";
+              updateLendingButtonState(); // 貸出ボタンの状態更新
             } else {
+               // 利用者情報が見つからなかった場合
                setMessage("利用者情報が見つかりませんでした。利用者IDを確認してください。");
+               resetLendingState(false); // 利用者情報のみリセット
             }
           })
           .withFailureHandler(error => {
             setMessage(`利用者情報の取得エラー: ${error.message}`);
             console.error("利用者情報取得エラー:", error);
+            resetLendingState(false); // エラー時も利用者情報のみリセット
           })
-          .getUserInfo(userId); // getUserInfoはGAS側で実装する必要がある
+          .getUserInfo(userIdValue);
+      }
+
+      // 書籍IDをリストに追加し、書籍名を取得・表示する関数
+      function addBookToList(bookId) {
+          if (!bookId) return;
+          const trimmedBookId = bookId.trim();
+          if (!trimmedBookId) return;
+
+          // 重複チェック
+          if (scannedBookIds.includes(trimmedBookId)) {
+              setMessage(`書籍ID [${trimmedBookId}] は既に追加されています。`);
+              clearBookIdInput();
+              return;
+          }
+
+          setMessage(`書籍 [${trimmedBookId}] の情報を検索中...`);
+          google.script.run
+              .withSuccessHandler(bookDetails => {
+                  if (bookDetails && bookDetails.title) {
+                      scannedBookIds.push(trimmedBookId);
+                      scannedBookTitles.push(bookDetails.title);
+                      updateBookDisplay();
+                      setMessage(`書籍「${bookDetails.title}」を追加しました。`);
+                  } else {
+                      setMessage(`書籍ID [${trimmedBookId}] の情報が見つかりませんでした。`);
+                  }
+                  clearBookIdInput(); // 処理後に入力欄をクリア
+                  updateLendingButtonState(); // 貸出ボタンの状態更新
+              })
+              .withFailureHandler(error => {
+                  setMessage(`書籍情報の取得エラー (ID: ${trimmedBookId}): ${error.message}`);
+                  console.error("書籍情報取得エラー:", error);
+                  clearBookIdInput();
+              })
+              .getBookDetails(trimmedBookId); // getBookDetailsを呼び出す
+      }
+
+      // 書籍ID入力欄をクリアする
+      function clearBookIdInput() {
+          document.getElementById('book-id').value = '';
+      }
+
+      // 書籍IDと書籍名の表示を更新する関数
+      function updateBookDisplay() {
+          // 書籍ID入力欄はクリアするので、ここでは何もしない（またはリスト表示用に別の要素を使う）
+          // document.getElementById('book-id').value = scannedBookIds.join(', ');
+          const listElement = document.getElementById('book-titles-list');
+          listElement.innerHTML = ''; // 一旦クリア
+          scannedBookTitles.forEach((title, index) => {
+              const p = document.createElement('p');
+              // 削除ボタンを追加する場合
+              // p.innerHTML = `- ${title} <button onclick="removeBook(${index})" style="font-size:0.8em; padding: 2px 5px; margin-left: 5px;">削除</button>`;
+              p.textContent = `- ${title} (ID: ${scannedBookIds[index]})`; // IDも表示
+              p.style.margin = '4px 0'; // リスト項目のマージン調整
+              listElement.appendChild(p);
+          });
+      }
+
+      // 貸出ボタンの有効/無効状態を更新する関数
+      function updateLendingButtonState() {
+          const lendingButton = document.getElementById('lending-button');
+          // 利用者IDが確定し、かつ書籍が1冊以上リストにあれば有効化
+          if (currentUserId && scannedBookIds.length > 0) {
+              lendingButton.disabled = false;
+          } else {
+              lendingButton.disabled = true;
+          }
+      }
+
+      // 書籍セクションの有効/無効を切り替える関数
+      function disableBookSection(disabled) {
+          document.getElementById('book-section').disabled = disabled;
+      }
+
+      // 貸出状態をリセットする関数
+      function resetLendingState(resetUser = true) { // 利用者情報もリセットするかどうか
+          scannedBookIds = [];
+          scannedBookTitles = [];
+          document.getElementById('book-id').value = '';
+          document.getElementById('book-id').readOnly = true; // ReadOnlyに戻す
+          document.getElementById('book-id').placeholder = "利用者ID確定後にスキャンしてください";
+          document.getElementById('book-titles-list').innerHTML = '';
+          disableBookSection(true); // 書籍セクションを無効化
+          if(resetUser){
+              currentUserId = null;
+              currentUserName = null;
+              document.getElementById('user-id').value = '';
+              document.getElementById('user-name').value = '';
+          }
+          updateLendingButtonState();
       }
 
 
-      // フォーム送信処理 (GAS側を呼び出す)
+      // 一括貸出処理 (GAS側を呼び出す)
       function submitForm() {
-        const bookId = document.getElementById('book-id').value.trim(); // Changed from isbn
-        const bookTitle = document.getElementById('book-title').value.trim();
-        const userId = document.getElementById('user-id').value.trim();
-        const userName = document.getElementById('user-name').value.trim();
+          if (!currentUserId || scannedBookIds.length === 0) {
+              setMessage("利用者IDと貸し出す書籍を確認してください。");
+              return;
+          }
 
-        // 書籍名と利用者名はDBから取得されるので、入力必須チェックは書籍IDと利用者IDのみ
-        if (!bookId || !userId) {
-          setMessage("書籍IDと利用者IDは必須です。スキャンまたは入力してください。"); // Updated message
-          return;
-        }
-        // 書籍名と利用者名が空の場合は、情報が見つからなかった可能性があるため警告
-        if (!bookTitle) {
-            setMessage("書籍情報が見つかっていません。書籍IDを確認してください。"); // Updated message
-            return;
-        }
-         if (!userName) {
-            setMessage("利用者情報が見つかっていません。利用者IDを確認してください。");
-            return;
-        }
+          setMessage("一括貸出処理を実行中...");
+          document.getElementById('lending-button').disabled = true; // 処理中はボタン無効化
 
+          const bulkData = {
+              userId: currentUserId,
+              userName: currentUserName,
+              bookIds: scannedBookIds // 書籍IDの配列を渡す
+          };
 
-        setMessage("貸出情報を登録中...");
-        const formData = {
-          bookId: bookId, // Changed from isbn
-          bookTitle: bookTitle,
-          userId: userId,
-          userName: userName
-        };
-
-        google.script.run
-          .withSuccessHandler(response => {
-            setMessage(response);
-            // 成功したらフォームの一部をリセット
-            if (response.includes("成功")) {
-               document.getElementById('book-id').value = ''; // Changed from isbn
-               document.getElementById('book-title').value = '';
-               document.getElementById('user-id').value = '';
-               document.getElementById('user-name').value = '';
-            }
-          })
-          .withFailureHandler(error => {
-            setMessage(`登録失敗: ${error.message}`);
-            console.error("フォーム送信エラー:", error);
-          })
-          .processLendingForm(formData);
+          google.script.run
+              .withSuccessHandler(response => {
+                  setMessage(response); // サーバーからのメッセージを表示
+                  // 成功したら状態をリセット
+                  if (response && typeof response === 'string' && response.includes("成功")) {
+                     resetLendingState(true); // 利用者情報も含めてリセット
+                  } else {
+                      // 失敗した場合でもボタンは有効に戻す
+                      document.getElementById('lending-button').disabled = false;
+                  }
+              })
+              .withFailureHandler(error => {
+                  setMessage(`一括貸出登録失敗: ${error.message}`);
+                  console.error("一括貸出エラー:", error);
+                  document.getElementById('lending-button').disabled = false; // エラー時もボタン有効化
+              })
+              .processBulkLending(bulkData); // 新しいサーバー関数を呼び出す
       }
 
+      // --- ユーティリティ関数 ---
       function setMessage(msg) {
         document.getElementById('message').innerText = msg;
       }
-
-      // 初期状態ではスキャナービューポートを非表示にする
-      document.getElementById('interactive').style.display = 'none';
-      document.getElementById('interactive-user').style.display = 'none';
-
-      // 書籍IDや利用者IDが手入力された場合にも情報取得を試みる
-      document.getElementById('book-id').addEventListener('change', (event) => { // Changed from isbn
-          if (!bookIdScanning) fetchBookDetails(event.target.value.trim()); // Changed function name
-      });
-       document.getElementById('user-id').addEventListener('change', (event) => {
-          if (!userScanning) fetchUserInfo(event.target.value.trim());
-      });
 
     </script>
   </body>

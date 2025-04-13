@@ -760,5 +760,266 @@ function findRentalRecords(bookId) {
   }
 }
 
+/**
+ * 複数の書籍IDを一括で返却処理する関数
+ * @param {string[]} bookIds - 返却する書籍IDの配列
+ * @return {object} 処理結果メッセージ { message: string }
+ */
+function processBulkReturn(bookIds) {
+  console.log("一括返却データ受信:", bookIds);
+  let successCount = 0;
+  let notFoundCount = 0;
+  let alreadyReturnedCount = 0;
+  let errorCount = 0;
+  const notFoundIds = [];
+  const alreadyReturnedIds = [];
+  const errorMessages = [];
+
+  if (!Array.isArray(bookIds) || bookIds.length === 0) {
+    return { message: "返却処理失敗: 書籍IDが指定されていません。" };
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lendingSheet = ss.getSheetByName("貸出記録");
+    if (!lendingSheet) {
+      throw new Error("シート「貸出記録」が見つかりません。");
+    }
+
+    const data = lendingSheet.getDataRange().getValues();
+    const bookIdColIndex = 0;     // A列
+    const statusColIndex = 6;     // G列
+    const returnDateColIndex = 7; // H列
+    const currentDate = new Date();
+
+    // シートのデータをMapに格納して高速化 (書籍IDをキー、行インデックスと行データを値)
+    // 注意: 同じ書籍IDで複数の未返却レコードがある場合、最後のものだけがMapに残る
+    const lendingMap = new Map();
+    for (let i = 1; i < data.length; i++) {
+      const rowBookId = data[i][bookIdColIndex] ? data[i][bookIdColIndex].toString().trim().toLowerCase() : null;
+      if (rowBookId) {
+         // 未返却のレコードのみを対象とするように修正
+         const rowStatus = data[i][statusColIndex];
+         if(rowStatus === "未返却") {
+            // 同じIDが複数あれば上書きされる（=最新の貸出が対象になる）
+             lendingMap.set(rowBookId, { index: i + 1, rowData: data[i] });
+         } else if (!lendingMap.has(rowBookId)) {
+             // 返却済みだがMapに未登録の場合（未返却がなかった場合）
+             lendingMap.set(rowBookId, { index: i + 1, rowData: data[i] });
+         }
+      }
+    }
+
+    const updates = []; // 更新内容を一時保存 [(rowIndex, statusCol, value), (rowIndex, dateCol, value)]
+
+    bookIds.forEach(bookId => {
+      const trimmedBookId = bookId.trim();
+      if (!trimmedBookId) return; // 空のIDはスキップ
+
+      const bookIdLower = trimmedBookId.toLowerCase();
+      const recordInfo = lendingMap.get(bookIdLower);
+
+      if (recordInfo) {
+        const rowIndex = recordInfo.index;
+        const rowStatus = recordInfo.rowData[statusColIndex];
+
+        if (rowStatus === "未返却") {
+          // 更新リストに追加
+          updates.push({ row: rowIndex, col: statusColIndex + 1, value: "返却済" });
+          updates.push({ row: rowIndex, col: returnDateColIndex + 1, value: currentDate });
+          successCount++;
+          console.log(`返却処理準備完了: 書籍ID=${trimmedBookId} (行 ${rowIndex})`);
+        } else {
+          alreadyReturnedCount++;
+          alreadyReturnedIds.push(trimmedBookId);
+          console.warn(`書籍ID ${trimmedBookId} は既に返却済みです (行 ${rowIndex})`);
+        }
+      } else {
+        notFoundCount++;
+        notFoundIds.push(trimmedBookId);
+        console.warn(`書籍ID ${trimmedBookId} の貸出記録が見つかりませんでした。`); // メッセージ修正
+      }
+    });
+
+    // まとめて更新 (GASのAPI呼び出し回数を減らすため)
+    if (updates.length > 0) {
+      updates.forEach(update => {
+        try {
+          lendingSheet.getRange(update.row, update.col).setValue(update.value);
+        } catch (e) {
+           // 個別の更新エラー処理
+           console.error(`行 ${update.row}, 列 ${update.col} の更新中にエラー: ${e}`);
+           errorCount++;
+           // 成功カウントを減らす（ステータス更新が失敗した場合）
+           if (update.col === statusColIndex + 1) successCount--;
+           // エラーが発生した書籍IDを特定（少し複雑になる）
+           // updates配列はステータスと日付のペアなので、インデックス/2で元のbookIds配列のインデックスに近づける
+           const failedBookIdIndex = Math.floor(updates.indexOf(update) / 2);
+           const failedBookId = bookIds[failedBookIdIndex] || `不明(Index:${failedBookIdIndex})`;
+           errorMessages.push(`ID ${failedBookId} の更新失敗`);
+        }
+      });
+      console.log(`${successCount}件の返却処理を更新しました。`);
+    }
+
+    // 結果メッセージの組み立て
+    let message = `${successCount}件の返却処理に成功しました。`;
+    if (notFoundCount > 0) {
+      message += ` ${notFoundCount}件は見つかりませんでした (${notFoundIds.join(', ')})。`;
+    }
+    if (alreadyReturnedCount > 0) {
+      message += ` ${alreadyReturnedCount}件は既に返却済みでした (${alreadyReturnedIds.join(', ')})。`;
+    }
+     if (errorCount > 0) {
+      message += ` ${errorCount}件の更新中にエラーが発生しました。`;
+    }
+
+    return { message: message };
+
+  } catch (error) {
+    console.error(`一括返却処理中にエラーが発生しました: ${error}`);
+    console.error(error);
+    return { message: `一括返却処理失敗: ${error.message}` };
+  }
+}
+
+
+/**
+ * 複数の書籍IDを一括で貸出登録する関数
+ * @param {object} bulkData - { userId: string, userName: string, bookIds: string[] }
+ * @return {string} 処理結果メッセージ
+ */
+function processBulkLending(bulkData) {
+  console.log("一括貸出データ受信:", bulkData);
+  let successCount = 0;
+  let errorCount = 0;
+  const errorMessages = [];
+
+  try {
+    // 入力チェック
+    if (!bulkData || !bulkData.userId || !bulkData.userName || !Array.isArray(bulkData.bookIds) || bulkData.bookIds.length === 0) {
+       throw new Error("必要な情報（利用者ID, 利用者名, 書籍IDリスト）が不足しているか、形式が正しくありません。");
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lendingSheet = ss.getSheetByName("貸出記録");
+    const bookSheet = ss.getSheetByName("書籍DB"); // 書籍名取得用
+
+    if (!lendingSheet || !bookSheet) {
+      console.error("必要なシート（貸出記録または書籍DB）が見つかりません。");
+      throw new Error("必要なシートが見つかりません。");
+    }
+
+    // 書籍DBの情報を先に読み込んでおく（効率化のため）
+    const bookData = bookSheet.getDataRange().getValues();
+    const bookMap = new Map(); // 書籍IDをキー、書籍名を値とするMap
+    for (let i = 1; i < bookData.length; i++) {
+      const bookId = bookData[i][0] ? bookData[i][0].toString().trim() : null;
+      const bookTitle = bookData[i][1] || "タイトル不明";
+      if (bookId) {
+        bookMap.set(bookId, bookTitle);
+      }
+    }
+
+    const lendingDate = new Date(); // 現在日時を貸出日時とする
+    const dueDate = new Date(lendingDate.getTime() + 14 * 24 * 60 * 60 * 1000); // 貸出日から2週間後
+    const returnStatus = "未返却"; // 初期状態
+
+    const rowsToAdd = [];
+
+    bulkData.bookIds.forEach(bookId => {
+      const trimmedBookId = bookId.trim();
+      if (!trimmedBookId) return; // 空のIDはスキップ
+
+      const bookTitle = bookMap.get(trimmedBookId) || "タイトル不明（DB未登録）";
+
+      // スプレッドシートに追加するデータ配列
+      rowsToAdd.push([
+        trimmedBookId,
+        bookTitle,
+        bulkData.userId,
+        bulkData.userName,
+        lendingDate,
+        dueDate,
+        returnStatus
+      ]);
+      successCount++;
+      console.log(`貸出準備完了: ${bookTitle} (ID: ${trimmedBookId})`);
+    });
+
+    // まとめて追記
+    if (rowsToAdd.length > 0) {
+      lendingSheet.getRange(lendingSheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+      console.log(`${successCount}件の貸出記録を追加しました。`);
+    }
+
+    if (errorCount > 0) {
+      return `貸出登録完了 (${successCount}件成功、${errorCount}件失敗)。失敗した書籍ID: ${errorMessages.join(', ')}`;
+    } else {
+      return `${successCount}件の貸出登録に成功しました。`;
+    }
+
+  } catch (error) {
+    console.error(`一括貸出処理中にエラーが発生しました: ${error}`);
+    console.error(error); // スタックトレースも出力
+    // クライアントにエラーメッセージを返す
+    return `一括貸出登録失敗: ${error.message}`;
+  }
+}
+
+
 // processReturnForm と getLendingInfo のテスト関数も同様に bookId ベースで作成可能
 // sendOverdueReminders のテストは、実際にメールが飛ぶため注意が必要
+
+
+/**
+ * スプレッドシートが開かれたときにカスタムメニューを追加する関数
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+      .createMenu('管理メニュー')
+      .addItem('バーコード生成', 'generateBarcodesForSheet')
+      .addToUi();
+}
+
+/**
+ * 「バーコード生成」シートのIDに基づいてバーコード画像を生成する関数
+ */
+function generateBarcodesForSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetName = "バーコード生成"; // 対象シート名
+  const sheet = ss.getSheetByName(sheetName);
+  const idColumn = 1; // ID列 (A列 = 1)
+  const barcodeColumn = 3; // バーコード画像列 (C列 = 3)
+
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert(`シート「${sheetName}」が見つかりません。`);
+    return;
+  }
+
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues(); // シート全体のデータを取得
+
+  // ヘッダー行を除き、指定列にデータがある行を処理
+  const formulas = [];
+  for (let i = 1; i < values.length; i++) { // i = 0 はヘッダーなのでスキップ
+    const id = values[i][idColumn - 1]; // 指定されたID列の値を取得 (0-based index)
+    if (id) { // IDが空でない場合のみ処理
+      // barcode.tec-it.com APIを使用してCode 128バーコードURLを生成 (DPIを300に戻す)
+      const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(id)}&code=Code128&dpi=300&borderwidth=10&bordercolor=FFFFFF`;
+      // IMAGE関数を作成 (モード2: セルに合わせて伸縮表示)
+      formulas.push([`=IMAGE("${barcodeUrl}", 2)`]);
+    } else {
+      formulas.push(['']); // IDがない場合は空文字を設定
+    }
+  }
+
+  // 指定列のデータ範囲に数式を設定 (ヘッダー行を除く)
+  if (formulas.length > 0) {
+    // 書き込み範囲を計算
+    sheet.getRange(2, barcodeColumn, formulas.length, 1).setFormulas(formulas);
+    SpreadsheetApp.getUi().alert(`「${sheetName}」シートのバーコード生成が完了しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert('処理対象のIDがありませんでした。');
+  }
+}

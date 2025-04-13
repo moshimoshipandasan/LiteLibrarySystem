@@ -52,7 +52,8 @@
         color: #444; /* 少し濃く */
         font-size: 1.2em; /* ラベルをさらに大きく */
       }
-      input[type="text"], input[type="number"] { /* numberも追加 */
+      /* Textarea for multiple IDs */
+      textarea {
         width: 100%;
         padding: 18px; /* 入力欄のパディングをさらに大きく */
         border: 1px solid #aaa; /* 境界線を少し濃く */
@@ -60,10 +61,7 @@
         box-sizing: border-box;
         font-size: 1.2em; /* 入力文字をさらに大きく */
         font-family: 'Noto Sans JP', sans-serif; /* フォント継承 */
-      }
-      input[readonly] {
-        background-color: #e9ecef;
-        cursor: not-allowed;
+        resize: vertical; /* 縦方向のリサイズのみ許可 */
       }
       button {
         background-color: #0056b3;
@@ -82,33 +80,22 @@
         background-color: #004494;
       }
       /* スキャンボタンは少し小さく */
-      #scan-book-id-button { /* ID修正 */
+      #scan-book-id-button {
          padding: 15px 20px; /* スキャンボタンのパディング調整 */
          background-color: #6c757d; /* グレー系 */
          margin-right: 10px;
          font-size: 1.1em; /* スキャンボタンも少し大きく */
          font-weight: 400; /* 通常の太さ */
       }
-       #scan-book-id-button:hover { /* ID修正 */
+       #scan-book-id-button:hover {
          background-color: #5a6268;
-      }
-      /* 検索ボタン */
-      button[onclick="fetchLendingInfo()"] {
-          margin-top: 15px; /* 上に少しスペース */
-          /* 他のボタンとスタイルを合わせる */
-          font-weight: 400;
-          padding: 15px 25px; /* パディング調整 */
-          font-size: 1.1em; /* 少し小さめでも良い */
       }
       /* 返却ボタン */
       #return-button {
-          display: inline-block; /* 初期はJSで非表示 */
-          width: auto; /* 幅自動 */
+          display: block; /* ブロック要素にして幅を100%に */
+          width: 100%;
           margin-top: 25px; /* 上マージン調整 */
           background-color: #dc3545; /* 警告の色 */
-          padding: 15px 25px; /* パディング調整 */
-          font-size: 1.2em; /* 他の主要ボタンと合わせる */
-          font-weight: 700;
       }
       #return-button:hover {
           background-color: #c82333;
@@ -120,7 +107,7 @@
 
 
       /* --- Scanner Viewport --- */
-      #interactive.viewport { /* ID修正 */
+      #interactive.viewport {
         position: relative;
         width: 100%;
         max-width: 480px; /* スキャナ表示の最大幅 */
@@ -131,7 +118,7 @@
         border-radius: 4px;
         background-color: #eee; /* 背景色 */
       }
-      #interactive.viewport > canvas, #interactive.viewport > video { /* ID修正 */
+      #interactive.viewport > canvas, #interactive.viewport > video {
         max-width: 100%;
         width: 100%;
         height: auto; /* 高さを自動に */
@@ -142,25 +129,6 @@
         top: 0;
       }
 
-      /* --- Book Details Area --- */
-      #book-details {
-        margin-top: 35px; /* 上マージン調整 */
-        padding: 30px; /* パディング調整 */
-        border: 1px solid #d6e9c6; /* 成功/情報系の色 */
-        background-color: #f0f9eb; /* 少し薄い背景色 */
-        border-radius: 6px;
-        color: #3c763d;
-        font-size: 1.2em; /* 詳細文字をさらに大きく */
-      }
-       #book-details p {
-           margin: 10px 0; /* 段落間のスペース調整 */
-       }
-       #book-details strong {
-           color: #31708f;
-           margin-right: 10px; /* ラベルと値の間にスペース */
-       }
-
-
       /* --- Message Area --- */
       #message {
         margin-top: 30px; /* 上マージン調整 */
@@ -170,68 +138,23 @@
         text-align: center;
         font-size: 1.2em; /* メッセージ文字をさらに大きく */
       }
-      /* メッセージの種類に応じてスタイルを変える（例） */
-      #message:not(:empty) { /* メッセージがある時だけ表示 */
+      #message:not(:empty) {
          display: block;
-         background-color: #e2f3ff; /* 情報メッセージの背景 */
+         background-color: #e2f3ff;
          border: 1px solid #b8dffc;
          color: #0056b3;
       }
-      /* エラーメッセージ用のスタイル（必要ならJSでクラスを付与） */
-      /*
-      #message.error {
-         background-color: #f8d7da;
-         border-color: #f5c6cb;
-         color: #721c24;
-      }
-      #message.success {
-         background-color: #d4edda;
-         border-color: #c3e6cb;
-         color: #155724;
-      }
-      */
 
       /* --- Responsive Design --- */
       @media (max-width: 600px) {
-        /* body, .container の padding, margin, max-width, border-radius, box-shadow はベーススタイルで対応済み */
-         .container {
-             padding: 10px; /* スマホではコンテナ内パディングを少し減らす */
-        }
-        h1 {
-          font-size: 1.8rem;
-           /* スマホ表示用にh1にも少しパディング */
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-         /* .form-group にも左右パディングを追加 */
-        .form-group {
-            padding-left: 10px;
-            padding-right: 10px;
-        }
-        /* 書籍詳細エリアにもパディング */
-        #book-details {
-            margin-left: 10px;
-            margin-right: 10px;
-        }
-        /* メッセージエリアにもパディング */
-        #message {
-            margin-left: 10px;
-            margin-right: 10px;
-        }
-        button {
-          width: 100%; /* 小画面ではボタン幅を100%に */
-          margin-right: 0;
-          margin-bottom: 10px; /* ボタン間の縦スペース */
-        }
-         #scan-book-id-button { /* ID修正 */
-             margin-bottom: 5px; /* スキャンボタン下のスペース */
-         }
-         button:last-of-type {
-             margin-bottom: 0;
-         }
-         #return-button {
-             width: 100%; /* 返却ボタンも全幅に */
-         }
+         .container { padding: 10px; }
+         h1 { font-size: 1.8rem; padding-left: 10px; padding-right: 10px; }
+         .form-group { padding-left: 10px; padding-right: 10px; }
+         #message { margin-left: 10px; margin-right: 10px; }
+         button { width: 100%; margin-right: 0; margin-bottom: 10px; }
+         #scan-book-id-button { margin-bottom: 5px; }
+         button:last-of-type { margin-bottom: 0; }
+         #return-button { width: 100%; }
       }
     </style>
   </head>
@@ -240,24 +163,15 @@
       <h1>図書返却</h1>
 
       <div class="form-group">
-        <label for="book-id">返却する本の書籍ID</label>
+        <label for="book-ids">返却する書籍ID（連続スキャン可能）</label>
         <button id="scan-book-id-button">書籍IDをスキャン</button>
-        <input type="text" id="book-id" name="bookId" placeholder="スキャンするか手入力してください">
-        <div id="interactive" class="viewport"></div>
+        <textarea id="book-ids" name="bookIds" placeholder="スキャンするか手入力（カンマ区切り）" rows="4" style="font-size: 1.2em; padding: 15px; border: 1px solid #aaa; border-radius: 6px; box-sizing: border-box; width: 100%; font-family: 'Noto Sans JP', sans-serif;"></textarea>
+        <div id="interactive" class="viewport" style="display: none;"></div> <!-- 初期非表示 -->
       </div>
       
-      <button onclick="fetchLendingInfo()">貸出情報検索</button> <!-- 検索ボタンを追加 -->
+      <button id="return-button" onclick="submitReturn()" disabled>一括返却処理</button> <!-- 初期は無効 -->
       
-      <div id="book-details" style="display: none;">
-        <p><strong>書籍名:</strong> <span id="book-title"></span></p>
-        <p><strong>貸出者:</strong> <span id="user-name"></span></p>
-        <p><strong>貸出日:</strong> <span id="lending-date"></span></p>
-        <button id="return-button" onclick="submitReturn()" style="display: none; margin-top: 10px;">この本を返却する</button> <!-- 返却ボタンを追加、初期非表示 -->
-      </div>
-
       <p id="message"></p>
-      
-      <!-- デバッグログ表示エリア削除 -->
       
     </div>
 
@@ -265,33 +179,34 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script>
       let isScanning = false;
+      let scannedBookIds = []; // 返却する書籍IDを保持する配列
+      let currentScannerTarget = null; // スキャナー用
 
-      // ページ読み込み完了時の処理
+      // --- 初期化処理 ---
       window.onload = function() {
-        // 初期状態ではスキャナービューポートを非表示にする
+        // スキャナービューポートを非表示
         document.getElementById('interactive').style.display = 'none';
-        // 初期状態では書籍詳細と返却ボタンを非表示にする
-        hideBookDetails(); 
-        
-        // スキャンボタンの処理
-        document.getElementById('scan-book-id-button').addEventListener('click', () => {
-          toggleScanner('interactive', 'book-id');
-        });
-        
-        // 書籍IDが手入力された場合にEnterキーで検索を実行
-        document.getElementById('book-id').addEventListener('keypress', (event) => {
-          if (event.key === 'Enter' && !isScanning) {
-            fetchLendingInfo(); // Enterキーでも検索
-          }
-        });
-        // 書籍ID入力欄の値が変わった時も検索を実行（手入力用）
-        document.getElementById('book-id').addEventListener('change', (event) => {
-          if (!isScanning) fetchLendingInfo();
-        });
+        // イベントリスナー設定
+        setupEventListeners();
+        updateReturnButtonState(); // 初期状態のボタン制御
       };
 
-      // スキャナーの表示/非表示を切り替える関数
-      function toggleScanner(targetElementId, inputFieldId) {
+      function setupEventListeners() {
+        // スキャンボタン
+        document.getElementById('scan-book-id-button').addEventListener('click', () => {
+          toggleScanner('interactive', 'book-ids'); // inputFieldIdはtextareaのID
+        });
+        // 書籍ID手入力（カンマ区切り）変更時
+        document.getElementById('book-ids').addEventListener('input', () => {
+            // 手入力の場合は配列を直接更新
+            const idsText = document.getElementById('book-ids').value;
+            scannedBookIds = idsText.split(/[\s,]+/).map(id => id.trim()).filter(id => id); // カンマまたは空白で区切り、空要素を除去
+            updateReturnButtonState();
+        });
+      }
+
+      // --- スキャナー関連関数 ---
+      function toggleScanner(targetElementId, inputFieldId) { // inputFieldIdはtextareaのID
         const targetViewport = document.getElementById(targetElementId);
         if (!isScanning) {
           targetViewport.style.display = 'block';
@@ -304,7 +219,6 @@
         }
       }
 
-      // スキャナーを起動する関数
       function startScanner(targetElementId, inputFieldId) {
         setMessage("カメラを起動しています...");
         Quagga.init({
@@ -312,18 +226,12 @@
             name : "Live",
             type : "LiveStream",
             target: document.getElementById(targetElementId),
-            constraints: {
-              width: 480,
-              facingMode: "environment"
-            },
-             area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
+            constraints: { width: 480, facingMode: "environment" },
+            area: { top: "20%", right: "10%", left: "10%", bottom: "20%" }
           },
           locator: { patchSize: "medium", halfSample: true },
           numOfWorkers: navigator.hardwareConcurrency || 4,
-          decoder : { readers : [ // 書籍IDで使いそうなバーコード形式を指定
-              'code_128_reader',
-              'code_39_reader'
-            ] },
+          decoder : { readers : [ 'code_128_reader', 'code_39_reader' ] },
           locate: true
         }, function(err) {
             if (err) {
@@ -333,7 +241,6 @@
                 isScanning = false;
                 return;
             }
-            // console.log("スキャナー初期化完了"); // ログ削除
             setMessage("バーコードをカメラに向けてください。");
             Quagga.start();
         });
@@ -342,19 +249,16 @@
 
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
-          // console.log("バーコード検出:", code); // ログ削除
-          document.getElementById(inputFieldId).value = code;
-          setMessage(`コード「${code}」を読み取りました。`);
-          stopScanner(targetElementId);
-          document.getElementById(targetElementId).style.display = 'none';
-          isScanning = false;
-          fetchLendingInfo(); // 書籍IDが読み取れたら貸出情報を取得
+          addBookIdToList(code); // スキャンしたIDをリストに追加
+          setMessage(`書籍ID [${code}] を追加しました。`);
+          // 連続スキャンのため停止しない
         });
       }
 
-      // スキャナーを停止する関数
       function stopScanner(targetElementId) {
-         if (Quagga.initialized) {
+         if (typeof Quagga !== 'undefined' && Quagga.initialized) {
+            Quagga.offDetected(null);
+            Quagga.offProcessed(null);
             Quagga.stop();
             const viewport = document.getElementById(targetElementId);
             if (viewport) {
@@ -363,134 +267,87 @@
               const video = viewport.querySelector('video');
               if (video) viewport.removeChild(video);
             }
-            // console.log("スキャナー停止"); // ログ削除
          }
       }
 
-      // デバッグログ関連関数削除
+      // --- データ処理関数 ---
 
-      // 貸出情報を取得する関数 (GAS側を呼び出す)
-      function fetchLendingInfo() {
-        const bookId = document.getElementById('book-id').value.trim();
-        if (!bookId) {
-          setMessage("書籍IDを入力またはスキャンしてください。");
-          hideBookDetails(); // 詳細を隠す
-          return;
-        }
-        setMessage("貸出情報を検索中...");
-        hideBookDetails(); // 詳細を一旦隠す
-        // addLog(`書籍ID [${bookId}] の貸出情報を検索します...`); // ログ削除
-        
-        google.script.run
-          .withSuccessHandler((result) => {
-            // addLog(`貸出情報検索結果: ${JSON.stringify(result)}`); // ログ削除
-            
-            // サーバーからのログは無視する
-            // if (result && result.logs) {
-            //   result.logs.forEach(log => addLog(log));
-            // }
+      // スキャンまたは手入力された書籍IDをリストに追加する関数
+      function addBookIdToList(bookId) {
+          if (!bookId) return;
+          const trimmedId = bookId.trim();
+          if (!trimmedId) return;
 
-            // lendingInfoが存在し、中身があるかチェック
-            if (result && result.lendingInfo && result.lendingInfo.bookTitle) { 
-              displayBookDetails(result.lendingInfo);
-              setMessage("貸出情報が見つかりました。内容を確認して返却処理を行ってください。");
-              // addLog("貸出情報が見つかりました。返却ボタンを表示します。"); // ログ削除
-              document.getElementById('return-button').style.display = 'inline-block'; // 返却ボタン表示
-            } else {
-              setMessage("この本の未返却の貸出記録が見つかりませんでした。書籍IDを確認してください。");
-              // addLog("未返却の貸出情報が見つかりませんでした。"); // ログ削除
-              hideBookDetails(); // 詳細と返却ボタンを隠す
-            }
-          })
-          .withFailureHandler(error => {
-            setMessage(`貸出情報の取得エラー: ${error.message}`);
-            // addLog(`サーバー呼び出し失敗 (getLendingInfo): ${error.message}`); // ログ削除
-            console.error("貸出情報取得エラー:", error); // エラーはコンソールに残す
-            hideBookDetails(); // エラー時も隠す
-          })
-          .getLendingInfo(bookId);
-      }
-
-      // 書籍詳細を表示
-      function displayBookDetails(info) {
-          document.getElementById('book-title').textContent = info.bookTitle || 'N/A';
-          document.getElementById('user-name').textContent = info.userName || 'N/A';
-          // 日付文字列をフォーマット (ISO文字列からDateオブジェクトを生成)
-          let lendingDateStr = 'N/A';
-          if (info.lendingDate && typeof info.lendingDate === 'string') {
-            try {
-              lendingDateStr = new Date(info.lendingDate).toLocaleString();
-            } catch (e) { 
-              // console.error("貸出日時のパースエラー:", e); // ログ削除
-              lendingDateStr = info.lendingDate; // パース失敗時は元の文字列を表示
-            }
+          // 重複チェック
+          if (!scannedBookIds.includes(trimmedId)) {
+              scannedBookIds.push(trimmedId);
+              updateBookIdDisplay();
+              updateReturnButtonState();
+              setMessage(`書籍ID [${trimmedId}] をリストに追加しました。`);
+          } else {
+              setMessage(`書籍ID [${trimmedId}] は既に追加されています。`);
           }
-          document.getElementById('lending-date').textContent = lendingDateStr;
-          document.getElementById('book-details').style.display = 'block';
-          document.getElementById('return-button').style.display = 'inline-block'; // 表示時に返却ボタンも表示
+          // textareaの内容も更新
+          document.getElementById('book-ids').value = scannedBookIds.join(', ');
       }
 
-       // 書籍詳細と返却ボタンを非表示
-      function hideBookDetails() {
-          document.getElementById('book-details').style.display = 'none';
-          document.getElementById('return-button').style.display = 'none'; // 返却ボタンも隠す
-          document.getElementById('book-title').textContent = '';
-          document.getElementById('user-name').textContent = '';
-          document.getElementById('lending-date').textContent = '';
+      // 書籍IDリスト表示を更新する関数
+      function updateBookIdDisplay() {
+          document.getElementById('book-ids').value = scannedBookIds.join(', ');
       }
 
+       // 返却ボタンの有効/無効状態を更新する関数
+      function updateReturnButtonState() {
+          const returnButton = document.getElementById('return-button');
+          if (scannedBookIds.length > 0) {
+              returnButton.disabled = false;
+          } else {
+              returnButton.disabled = true;
+          }
+      }
 
-      // 返却処理実行 (GAS側を呼び出す)
+      // 状態をリセットする関数
+      function resetReturnState() {
+          scannedBookIds = [];
+          document.getElementById('book-ids').value = '';
+          updateReturnButtonState();
+      }
+
+      // 一括返却処理実行 (GAS側を呼び出す)
       function submitReturn() {
-        const bookId = document.getElementById('book-id').value.trim();
-        if (!bookId) {
-          setMessage("書籍IDが入力されていません。"); 
-          return;
-        }
-        // 書籍詳細が表示されていない（=貸出情報が見つかっていない）場合は処理しない
-        if (document.getElementById('book-details').style.display === 'none') {
-            setMessage("先に書籍IDを入力またはスキャンして貸出情報を確認してください。");
-            return;
-        }
+          // textareaから最新のIDリストを取得（手入力対応）
+          const idsText = document.getElementById('book-ids').value;
+          scannedBookIds = idsText.split(/[\s,]+/).map(id => id.trim()).filter(id => id);
 
-        // addLog(`書籍ID [${bookId}] の返却処理を開始します...`); // ログ削除
-        setMessage("返却処理を実行中...");
-        document.getElementById('return-button').disabled = true; // ボタンを無効化
-        
-        google.script.run
-          .withSuccessHandler(result => {
-            // addLog(`返却処理結果: ${JSON.stringify(result)}`); // ログ削除
-            
-            // サーバーからのログは無視
-            // if (result && result.logs) {
-            //   result.logs.forEach(log => addLog(log));
-            // }
-            
-            if (result && result.message) {
-              setMessage(result.message);
-              if (result.message.includes("成功")) {
-                document.getElementById('book-id').value = ''; // 成功したら書籍IDをクリア
-                hideBookDetails(); // 詳細と返却ボタンを隠す
-                // addLog("返却処理が正常に完了しました。"); // ログ削除
-              } else {
-                 // addLog(`返却処理で問題が発生しました: ${result.message}`); // ログ削除
-              }
-            } else {
-               // 予期しない応答形式
-               setMessage("返却処理中に予期しない応答がありました。");
-               // addLog(`予期しない返却処理応答: ${JSON.stringify(result)}`); // ログ削除
-            }
-             document.getElementById('return-button').disabled = false; // ボタンを有効化
-          })
-          .withFailureHandler(error => {
-            setMessage(`返却処理失敗: ${error.message}`);
-            // addLog(`サーバー呼び出し失敗 (processReturnForm): ${error.message}`); // ログ削除
-            console.error("返却処理エラー:", error); // エラーはコンソールに残す
-            document.getElementById('return-button').disabled = false; // ボタンを有効化
-          })
-          .processReturnForm(bookId);
+          if (scannedBookIds.length === 0) {
+              setMessage("返却する書籍IDがありません。");
+              return;
+          }
+
+          setMessage("一括返却処理を実行中...");
+          document.getElementById('return-button').disabled = true; // 処理中はボタン無効化
+
+          google.script.run
+              .withSuccessHandler(response => {
+                  setMessage(response.message || "処理が完了しましたが、メッセージがありません。"); // メッセージ表示
+                  // 成功したら状態をリセット
+                  if (response && response.message && response.message.includes("成功")) {
+                     resetReturnState();
+                  } else {
+                      // 失敗した場合でもボタンは有効に戻す
+                      document.getElementById('return-button').disabled = false;
+                  }
+                  // サーバーからのログは無視
+              })
+              .withFailureHandler(error => {
+                  setMessage(`一括返却処理失敗: ${error.message}`);
+                  console.error("一括返却エラー:", error);
+                  document.getElementById('return-button').disabled = false; // エラー時もボタン有効化
+              })
+              .processBulkReturn(scannedBookIds); // 新しいサーバー関数を呼び出す
       }
 
+      // --- ユーティリティ関数 ---
       function setMessage(msg) {
         document.getElementById('message').innerText = msg;
       }
