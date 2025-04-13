@@ -5,20 +5,189 @@
     <title>図書返却システム</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-      body { font-family: sans-serif; padding: 10px; }
-      .container { max-width: 600px; margin: auto; }
-      .form-group { margin-bottom: 15px; }
-      label { display: block; margin-bottom: 5px; }
-      input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
-      button { padding: 10px 15px; cursor: pointer; margin-right: 5px; }
-      #interactive.viewport { position: relative; width: 100%; height: auto; overflow: hidden; margin-top: 10px; border: 1px solid #ccc;}
-      #interactive.viewport > canvas, #interactive.viewport > video { max-width: 100%; width: 100%; }
-      canvas.drawing, canvas.drawingBuffer { position: absolute; left: 0; top: 0; }
-      #message { margin-top: 15px; font-weight: bold; }
-      #book-details { margin-top: 10px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9; }
-      /* デバッグログ用スタイル */
-      #debug-log { margin-top: 20px; border: 1px solid #ccc; padding: 10px; background-color: #f5f5f5; max-height: 300px; overflow-y: auto; display: none; }
-      #log-content { white-space: pre-wrap; font-family: monospace; font-size: 12px; }
+      /* --- General Styles --- */
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 700px; /* 少し広げる */
+        margin: 20px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #0056b3; /* 図書館らしい青 */
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+      }
+
+      /* --- Form Styles --- */
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type="text"], input[type="number"] { /* numberも追加 */
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 1rem;
+      }
+      input[readonly] {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+      }
+      button {
+        background-color: #0056b3;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.3s ease;
+        margin-top: 5px; /* ボタン間のスペース */
+      }
+      button:hover {
+        background-color: #004494;
+      }
+      /* スキャンボタンは少し小さく */
+      #scan-book-id-button { /* ID修正 */
+         padding: 10px 15px;
+         background-color: #6c757d; /* グレー系 */
+         margin-right: 10px;
+      }
+       #scan-book-id-button:hover { /* ID修正 */
+         background-color: #5a6268;
+      }
+      /* 検索ボタン */
+      button[onclick="fetchLendingInfo()"] {
+          margin-top: 10px; /* 上に少しスペース */
+      }
+      /* 返却ボタン */
+      #return-button {
+          display: inline-block; /* 初期はJSで非表示 */
+          width: auto; /* 幅自動 */
+          margin-top: 15px;
+          background-color: #dc3545; /* 警告の色 */
+          padding: 10px 15px; /* 少し小さめ */
+      }
+      #return-button:hover {
+          background-color: #c82333;
+      }
+      #return-button:disabled {
+          background-color: #ccc;
+          cursor: not-allowed;
+      }
+
+
+      /* --- Scanner Viewport --- */
+      #interactive.viewport { /* ID修正 */
+        position: relative;
+        width: 100%;
+        max-width: 480px; /* スキャナ表示の最大幅 */
+        height: auto;
+        overflow: hidden;
+        margin-top: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #eee; /* 背景色 */
+      }
+      #interactive.viewport > canvas, #interactive.viewport > video { /* ID修正 */
+        max-width: 100%;
+        width: 100%;
+        height: auto; /* 高さを自動に */
+      }
+      canvas.drawing, canvas.drawingBuffer {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+
+      /* --- Book Details Area --- */
+      #book-details {
+        margin-top: 25px;
+        padding: 20px;
+        border: 1px solid #d6e9c6; /* 成功/情報系の色 */
+        background-color: #dff0d8; /* 成功/情報系の色 */
+        border-radius: 4px;
+        color: #3c763d;
+      }
+       #book-details p {
+           margin: 5px 0;
+       }
+       #book-details strong {
+           color: #31708f;
+       }
+
+
+      /* --- Message Area --- */
+      #message {
+        margin-top: 20px;
+        font-weight: bold;
+        padding: 10px;
+        border-radius: 4px;
+        text-align: center;
+      }
+      /* メッセージの種類に応じてスタイルを変える（例） */
+      #message:not(:empty) { /* メッセージがある時だけ表示 */
+         display: block;
+         background-color: #e2f3ff; /* 情報メッセージの背景 */
+         border: 1px solid #b8dffc;
+         color: #0056b3;
+      }
+      /* エラーメッセージ用のスタイル（必要ならJSでクラスを付与） */
+      /*
+      #message.error {
+         background-color: #f8d7da;
+         border-color: #f5c6cb;
+         color: #721c24;
+      }
+      #message.success {
+         background-color: #d4edda;
+         border-color: #c3e6cb;
+         color: #155724;
+      }
+      */
+
+      /* --- Responsive Design --- */
+      @media (max-width: 600px) {
+        .container {
+          padding: 20px;
+        }
+        h1 {
+          font-size: 1.8rem;
+        }
+        button {
+          width: 100%; /* 小画面ではボタン幅を100%に */
+          margin-right: 0;
+          margin-bottom: 10px; /* ボタン間の縦スペース */
+        }
+         #scan-book-id-button { /* ID修正 */
+             margin-bottom: 5px; /* スキャンボタン下のスペース */
+         }
+         button:last-of-type {
+             margin-bottom: 0;
+         }
+         #return-button {
+             width: 100%; /* 返却ボタンも全幅に */
+         }
+      }
     </style>
   </head>
   <body>
@@ -43,12 +212,8 @@
 
       <p id="message"></p>
       
-      <!-- デバッグログ表示エリア -->
-      <div id="debug-log">
-        <h3>デバッグログ</h3>
-        <pre id="log-content"></pre>
-        <button onclick="toggleDebugLog()">ログ表示切替</button>
-      </div>
+      <!-- デバッグログ表示エリア削除 -->
+      
     </div>
 
     <!-- バーコード読み取りライブラリ (QuaggaJSを使用) -->
@@ -60,8 +225,6 @@
       window.onload = function() {
         // 初期状態ではスキャナービューポートを非表示にする
         document.getElementById('interactive').style.display = 'none';
-        // 初期状態ではデバッグログを非表示にする
-        document.getElementById('debug-log').style.display = 'none';
         // 初期状態では書籍詳細と返却ボタンを非表示にする
         hideBookDetails(); 
         
@@ -125,7 +288,7 @@
                 isScanning = false;
                 return;
             }
-            console.log("スキャナー初期化完了");
+            // console.log("スキャナー初期化完了"); // ログ削除
             setMessage("バーコードをカメラに向けてください。");
             Quagga.start();
         });
@@ -134,7 +297,7 @@
 
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
-          console.log("バーコード検出:", code);
+          // console.log("バーコード検出:", code); // ログ削除
           document.getElementById(inputFieldId).value = code;
           setMessage(`コード「${code}」を読み取りました。`);
           stopScanner(targetElementId);
@@ -155,29 +318,11 @@
               const video = viewport.querySelector('video');
               if (video) viewport.removeChild(video);
             }
-            console.log("スキャナー停止");
+            // console.log("スキャナー停止"); // ログ削除
          }
       }
 
-      // デバッグログの表示/非表示を切り替える関数
-      function toggleDebugLog() {
-        const debugLog = document.getElementById('debug-log');
-        if (debugLog.style.display === 'none') {
-          debugLog.style.display = 'block';
-        } else {
-          debugLog.style.display = 'none';
-        }
-      }
-      
-      // ログを追加する関数
-      function addLog(message) {
-        const logContent = document.getElementById('log-content');
-        const timestamp = new Date().toLocaleTimeString();
-        logContent.innerHTML += `[${timestamp}] ${message}\n`;
-        document.getElementById('debug-log').style.display = 'block'; // ログがあれば表示する
-        // 自動スクロール
-        logContent.scrollTop = logContent.scrollHeight;
-      }
+      // デバッグログ関連関数削除
 
       // 貸出情報を取得する関数 (GAS側を呼び出す)
       function fetchLendingInfo() {
@@ -189,32 +334,33 @@
         }
         setMessage("貸出情報を検索中...");
         hideBookDetails(); // 詳細を一旦隠す
-        addLog(`書籍ID [${bookId}] の貸出情報を検索します...`);
+        // addLog(`書籍ID [${bookId}] の貸出情報を検索します...`); // ログ削除
         
         google.script.run
           .withSuccessHandler((result) => {
-            addLog(`貸出情報検索結果: ${JSON.stringify(result)}`); // 結果をログに記録
+            // addLog(`貸出情報検索結果: ${JSON.stringify(result)}`); // ログ削除
             
-            if (result && result.logs) {
-              result.logs.forEach(log => addLog(log));
-            }
+            // サーバーからのログは無視する
+            // if (result && result.logs) {
+            //   result.logs.forEach(log => addLog(log));
+            // }
 
             // lendingInfoが存在し、中身があるかチェック
             if (result && result.lendingInfo && result.lendingInfo.bookTitle) { 
               displayBookDetails(result.lendingInfo);
               setMessage("貸出情報が見つかりました。内容を確認して返却処理を行ってください。");
-              addLog("貸出情報が見つかりました。返却ボタンを表示します。");
+              // addLog("貸出情報が見つかりました。返却ボタンを表示します。"); // ログ削除
               document.getElementById('return-button').style.display = 'inline-block'; // 返却ボタン表示
             } else {
               setMessage("この本の未返却の貸出記録が見つかりませんでした。書籍IDを確認してください。");
-              addLog("未返却の貸出情報が見つかりませんでした。");
+              // addLog("未返却の貸出情報が見つかりませんでした。"); // ログ削除
               hideBookDetails(); // 詳細と返却ボタンを隠す
             }
           })
           .withFailureHandler(error => {
             setMessage(`貸出情報の取得エラー: ${error.message}`);
-            addLog(`サーバー呼び出し失敗 (getLendingInfo): ${error.message}`);
-            console.error("貸出情報取得エラー:", error);
+            // addLog(`サーバー呼び出し失敗 (getLendingInfo): ${error.message}`); // ログ削除
+            console.error("貸出情報取得エラー:", error); // エラーはコンソールに残す
             hideBookDetails(); // エラー時も隠す
           })
           .getLendingInfo(bookId);
@@ -230,7 +376,7 @@
             try {
               lendingDateStr = new Date(info.lendingDate).toLocaleString();
             } catch (e) { 
-              console.error("貸出日時のパースエラー:", e); 
+              // console.error("貸出日時のパースエラー:", e); // ログ削除
               lendingDateStr = info.lendingDate; // パース失敗時は元の文字列を表示
             }
           }
@@ -262,38 +408,39 @@
             return;
         }
 
-        addLog(`書籍ID [${bookId}] の返却処理を開始します...`);
+        // addLog(`書籍ID [${bookId}] の返却処理を開始します...`); // ログ削除
         setMessage("返却処理を実行中...");
         document.getElementById('return-button').disabled = true; // ボタンを無効化
         
         google.script.run
           .withSuccessHandler(result => {
-            addLog(`返却処理結果: ${JSON.stringify(result)}`); // 結果をログに記録
+            // addLog(`返却処理結果: ${JSON.stringify(result)}`); // ログ削除
             
-            if (result && result.logs) {
-              result.logs.forEach(log => addLog(log));
-            }
+            // サーバーからのログは無視
+            // if (result && result.logs) {
+            //   result.logs.forEach(log => addLog(log));
+            // }
             
             if (result && result.message) {
               setMessage(result.message);
               if (result.message.includes("成功")) {
                 document.getElementById('book-id').value = ''; // 成功したら書籍IDをクリア
                 hideBookDetails(); // 詳細と返却ボタンを隠す
-                addLog("返却処理が正常に完了しました。");
+                // addLog("返却処理が正常に完了しました。"); // ログ削除
               } else {
-                 addLog(`返却処理で問題が発生しました: ${result.message}`);
+                 // addLog(`返却処理で問題が発生しました: ${result.message}`); // ログ削除
               }
             } else {
                // 予期しない応答形式
                setMessage("返却処理中に予期しない応答がありました。");
-               addLog(`予期しない返却処理応答: ${JSON.stringify(result)}`);
+               // addLog(`予期しない返却処理応答: ${JSON.stringify(result)}`); // ログ削除
             }
              document.getElementById('return-button').disabled = false; // ボタンを有効化
           })
           .withFailureHandler(error => {
             setMessage(`返却処理失敗: ${error.message}`);
-            addLog(`サーバー呼び出し失敗 (processReturnForm): ${error.message}`);
-            console.error("返却処理エラー:", error);
+            // addLog(`サーバー呼び出し失敗 (processReturnForm): ${error.message}`); // ログ削除
+            console.error("返却処理エラー:", error); // エラーはコンソールに残す
             document.getElementById('return-button').disabled = false; // ボタンを有効化
           })
           .processReturnForm(bookId);

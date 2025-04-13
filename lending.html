@@ -5,17 +5,161 @@
     <title>図書貸出システム</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-      body { font-family: sans-serif; padding: 10px; }
-      .container { max-width: 600px; margin: auto; }
-      .form-group { margin-bottom: 15px; }
-      label { display: block; margin-bottom: 5px; }
-      input[type="text"], input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; }
-      button { padding: 10px 15px; cursor: pointer; margin-right: 5px; }
-      #interactive.viewport, #interactive-user.viewport { position: relative; width: 100%; height: auto; overflow: hidden; margin-top: 10px; border: 1px solid #ccc;}
+      /* --- General Styles --- */
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f4f4;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 700px; /* 少し広げる */
+        margin: 20px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #0056b3; /* 図書館らしい青 */
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+      }
+
+      /* --- Form Styles --- */
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type="text"], input[type="number"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 1rem;
+      }
+      input[readonly] {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+      }
+      button {
+        background-color: #0056b3;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.3s ease;
+        margin-top: 5px; /* ボタン間のスペース */
+      }
+      button:hover {
+        background-color: #004494;
+      }
+      /* スキャンボタンは少し小さく */
+      #scan-book-id-button, #scan-user-button {
+         padding: 10px 15px;
+         background-color: #6c757d; /* グレー系 */
+         margin-right: 10px;
+      }
+       #scan-book-id-button:hover, #scan-user-button:hover {
+         background-color: #5a6268;
+      }
+      /* メインの登録ボタン */
+      button[onclick="submitForm()"] {
+          display: block; /* ブロック要素にして幅を100%に */
+          width: 100%;
+          margin-top: 20px;
+          background-color: #28a745; /* 成功の色 */
+      }
+      button[onclick="submitForm()"]:hover {
+          background-color: #218838;
+      }
+
+
+      /* --- Scanner Viewport --- */
+      #interactive.viewport, #interactive-user.viewport {
+        position: relative;
+        width: 100%;
+        max-width: 480px; /* スキャナ表示の最大幅 */
+        height: auto;
+        overflow: hidden;
+        margin-top: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #eee; /* 背景色 */
+      }
       #interactive.viewport > canvas, #interactive.viewport > video,
-      #interactive-user.viewport > canvas, #interactive-user.viewport > video { max-width: 100%; width: 100%; }
-      canvas.drawing, canvas.drawingBuffer { position: absolute; left: 0; top: 0; }
-      #message { margin-top: 15px; font-weight: bold; }
+      #interactive-user.viewport > canvas, #interactive-user.viewport > video {
+        max-width: 100%;
+        width: 100%;
+        height: auto; /* 高さを自動に */
+      }
+      canvas.drawing, canvas.drawingBuffer {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+
+      /* --- Message Area --- */
+      #message {
+        margin-top: 20px;
+        font-weight: bold;
+        padding: 10px;
+        border-radius: 4px;
+        text-align: center;
+      }
+      /* メッセージの種類に応じてスタイルを変える（例） */
+      #message:not(:empty) { /* メッセージがある時だけ表示 */
+         display: block;
+         background-color: #e2f3ff; /* 情報メッセージの背景 */
+         border: 1px solid #b8dffc;
+         color: #0056b3;
+      }
+      /* エラーメッセージ用のスタイル（必要ならJSでクラスを付与） */
+      /*
+      #message.error {
+         background-color: #f8d7da;
+         border-color: #f5c6cb;
+         color: #721c24;
+      }
+      #message.success {
+         background-color: #d4edda;
+         border-color: #c3e6cb;
+         color: #155724;
+      }
+      */
+
+      /* --- Responsive Design --- */
+      @media (max-width: 600px) {
+        .container {
+          padding: 20px;
+        }
+        h1 {
+          font-size: 1.8rem;
+        }
+        button {
+          width: 100%; /* 小画面ではボタン幅を100%に */
+          margin-right: 0;
+          margin-bottom: 10px; /* ボタン間の縦スペース */
+        }
+         #scan-book-id-button, #scan-user-button {
+             margin-bottom: 5px; /* スキャンボタン下のスペース */
+         }
+         button:last-of-type {
+             margin-bottom: 0;
+         }
+      }
     </style>
   </head>
   <body>
